@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ytdigest-Laufzeitdaten
+/data/
+/logs/
+/transkripte/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# lokale Konfiguration
+/feeds.local.txt
+tests/fixtures/feed_basic.xml
+feeds.txt

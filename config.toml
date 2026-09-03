@@ -1,0 +1,33 @@
+[paths]
+feeds_file   = "feeds.txt"
+database     = "data/ytdigest.sqlite3"
+output_dir   = "transkripte"
+temp_dir     = ""            # leer = Systemtemp
+log_file     = "logs/ytdigest.log"
+
+[feeds]
+request_timeout_s   = 15
+delay_between_s     = 2.0    # Höflichkeitspause zwischen Feed-Abrufen
+use_conditional_get = true   # ETag / If-Modified-Since
+
+[transcripts]
+languages        = ["de", "en"]   # Präferenzreihenfolge
+prefer_manual    = true           # manuelle vor Auto-Captions
+max_attempts     = 3
+retry_backoff_s  = [60, 300, 1800]
+
+[filters]
+min_duration_min = 8              # kürzere Videos überspringen (Shorts, Clips)
+
+[asr]
+enabled          = true
+model            = "large-v3"
+device           = "cuda"         # "cuda" | "cpu" | "auto"
+compute_type     = "float16"
+beam_size        = 5
+max_duration_min = 90             # längere Videos nicht per ASR verarbeiten
+
+[output]
+include_video_id  = false   # true = Video-ID immer an den Dateinamen hängen
+max_filename_len  = 120
+timestamp_source  = "published_utc"
