@@ -76,6 +76,7 @@ class VideoProbe:
     duration_s: int | None
     manual_langs: list[str] = field(default_factory=list)
     auto_langs: list[str] = field(default_factory=list)
+    original_lang: str | None = None    # tatsächliche Sprachspur des Videos
     error: str | None = None            # kurze Klartextursache, siehe spec 10
     info: dict = field(default_factory=dict)
 

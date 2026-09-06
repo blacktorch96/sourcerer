@@ -16,6 +16,7 @@ from ytdigest.config import Config
 from ytdigest.db.repo import Repo, iso_utc
 from ytdigest.feeds.fetcher import fetch_feed, resolve_handle
 from ytdigest.feeds.parser import feed_url_for_channel, parse_feeds_file
+from ytdigest.gdrive import DriveUploader, GDriveUnavailable
 from ytdigest.models import Feed, FeedEntry, RunReport, Video
 from ytdigest.naming import slugify
 from ytdigest.sources import asr, captions
@@ -50,6 +51,8 @@ class Pipeline:
         self.cfg = cfg
         self.conn = conn
         self.repo = Repo(conn)
+        self._drive: DriveUploader | None = None
+        self._drive_failed = False
 
     # ------------------------------------------------------------------ run
     def run(self, opts: RunOptions) -> RunReport:
@@ -279,6 +282,7 @@ class Pipeline:
             result = captions.fetch_captions(
                 meta, self.cfg.transcripts.languages,
                 prefer_manual=self.cfg.transcripts.prefer_manual,
+                prefer_original=self.cfg.transcripts.prefer_original,
             )
 
         if result is None:
@@ -293,6 +297,7 @@ class Pipeline:
         tpath, mpath = write_transcript(self.cfg, feed, current, result)
         self.repo.finish_done(video.video_id, result,
                               transcript_path=tpath, metadata_path=mpath)
+        self._upload_to_drive(feed, tpath, mpath)
         report.processed += 1
         if result.source == "asr":
             report.via_asr += 1
@@ -315,6 +320,31 @@ class Pipeline:
         except asr.AsrUnavailable as exc:
             log.warning("ASR nicht verfügbar: %s", exc)
             return None
+
+    def _upload_to_drive(self, feed: Feed, tpath: str, mpath: str) -> None:
+        """Lädt Transkript (+ Sidecar) nach Google Drive hoch, falls konfiguriert.
+
+        Ein Upload-Fehler lässt das Video als 'done' stehen - die lokale Datei
+        ist bereits geschrieben und maßgeblich, es wird nur eine Warnung
+        geloggt statt den Lauf abzubrechen."""
+        if not self.cfg.gdrive.enabled or self._drive_failed:
+            return
+        if self._drive is None:
+            try:
+                self._drive = DriveUploader(self.cfg.gdrive)
+            except GDriveUnavailable as exc:
+                log.warning("Google-Drive-Upload deaktiviert: %s", exc)
+                self._drive_failed = True
+                return
+
+        output_dir = self.cfg.paths.output_dir
+        paths = [output_dir / tpath]
+        if self.cfg.gdrive.upload_sidecar:
+            paths.append(output_dir / mpath)
+        try:
+            self._drive.upload(feed.dir_slug, *paths)
+        except GDriveUnavailable as exc:
+            log.warning("Drive-Upload fehlgeschlagen für %s: %s", tpath, exc)
 
     # --------------------------------------------------------------- helpers
     def _fail(self, video: Video, cause: str, report: RunReport) -> None:

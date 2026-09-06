@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 asr = ["faster-whisper>=1.0"]
+gdrive = ["google-api-python-client>=2.130", "google-auth>=2.30"]
 
 [project.scripts]
 ytdigest = "ytdigest.cli:app"

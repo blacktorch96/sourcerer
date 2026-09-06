@@ -11,6 +11,7 @@ from ytdigest import __version__
 from ytdigest.config import Config
 from ytdigest.models import Feed, TranscriptResult, Video
 from ytdigest.naming import build_basename
+from ytdigest.reflow import wrap_transcript
 
 SCHEMA_VERSION = 1
 
@@ -58,6 +59,9 @@ def write_transcript(cfg: Config, feed: Feed, video: Video,
 
     txt_path = target_dir / f"{base}.txt"
     json_path = target_dir / f"{base}.json"
+
+    if cfg.output.line_width > 0:
+        result.text = wrap_transcript(result.text, width=cfg.output.line_width)
 
     sidecar = {
         "schema_version": SCHEMA_VERSION,

@@ -32,7 +32,8 @@ class FeedsCfg(BaseModel):
 
 
 class TranscriptsCfg(BaseModel):
-    languages: list[str] = ["de", "en"]
+    prefer_original: bool = True   # immer die tatsächliche Videosprache, nie Auto-Übersetzung
+    languages: list[str] = ["de", "en"]  # nur Fallback, falls Originalsprache unbestimmbar
     prefer_manual: bool = True
     max_attempts: int = 3
     retry_backoff_s: list[int] = [60, 300, 1800]
@@ -55,6 +56,15 @@ class OutputCfg(BaseModel):
     include_video_id: bool = False
     max_filename_len: int = 120
     timestamp_source: str = "published_utc"
+    line_width: int = 120   # Zeilenumbruch im Transkript-Text, 0 = kein Umbruch
+
+
+class GDriveCfg(BaseModel):
+    enabled: bool = False
+    service_account_file: Path = Path("service_account.json")
+    folder_id: str = ""          # ID des freigegebenen Zielordners in Google Drive
+    mirror_subdirs: bool = True  # je Kanal einen Unterordner (wie dir_slug lokal) anlegen
+    upload_sidecar: bool = True  # zusätzlich zur .txt auch die .json-Metadatei hochladen
 
 
 class Config(BaseModel):
@@ -64,6 +74,7 @@ class Config(BaseModel):
     filters: FiltersCfg = Field(default_factory=FiltersCfg)
     asr: AsrCfg = Field(default_factory=AsrCfg)
     output: OutputCfg = Field(default_factory=OutputCfg)
+    gdrive: GDriveCfg = Field(default_factory=GDriveCfg)
 
     source_path: Path | None = None
 

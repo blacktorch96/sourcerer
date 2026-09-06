@@ -19,5 +19,8 @@ htmlcov/
 
 # lokale Konfiguration
 /feeds.local.txt
+
+# Google-Drive-Credentials (Pfad ist in config.toml frei wählbar, Default hier mit ausgeschlossen)
+service_account.json
 tests/fixtures/feed_basic.xml
 feeds.txt

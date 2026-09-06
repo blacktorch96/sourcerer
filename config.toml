@@ -11,7 +11,8 @@ delay_between_s     = 2.0    # Höflichkeitspause zwischen Feed-Abrufen
 use_conditional_get = true   # ETag / If-Modified-Since
 
 [transcripts]
-languages        = ["de", "en"]   # Präferenzreihenfolge
+prefer_original  = true           # immer Originalsprache des Videos, nie Auto-Übersetzung
+languages        = ["en", "de"]   # nur Fallback, falls Originalsprache unbestimmbar
 prefer_manual    = true           # manuelle vor Auto-Captions
 max_attempts     = 3
 retry_backoff_s  = [60, 300, 1800]
@@ -31,3 +32,11 @@ max_duration_min = 90             # längere Videos nicht per ASR verarbeiten
 include_video_id  = false   # true = Video-ID immer an den Dateinamen hängen
 max_filename_len  = 120
 timestamp_source  = "published_utc"
+line_width        = 120     # Zeilenumbruch im Transkript-Text, 0 = kein Umbruch
+
+[gdrive]
+enabled              = false                       # true = Transkripte zusätzlich nach Google Drive hochladen
+service_account_file = "service_account.json"       # Key-Datei eines Google-Cloud-Service-Accounts
+folder_id            = ""                           # ID des Drive-Zielordners (mit der Service-Account-E-Mail teilen!)
+mirror_subdirs       = true                         # je Kanal einen Unterordner wie lokal (dir_slug) anlegen
+upload_sidecar       = true                         # auch die .json-Metadatei mit hochladen

@@ -112,7 +112,10 @@ def resolve_handle(handle_or_url: str, *, timeout_s: float) -> str:
     else:
         url = f"https://www.youtube.com/@{handle_or_url}"
 
+    # Ohne Consent-Cookie leitet YouTube EU-Anfragen auf consent.youtube.com
+    # um; "SOCS=CAI" markiert die Cookie-Zustimmung als bereits erteilt.
     resp = httpx.get(url, headers={"User-Agent": _USER_AGENT},
+                     cookies={"SOCS": "CAI"},
                      timeout=timeout_s, follow_redirects=True)
     resp.raise_for_status()
     text = resp.text
