@@ -37,6 +37,8 @@ class TranscriptsCfg(BaseModel):
     prefer_manual: bool = True
     max_attempts: int = 3
     retry_backoff_s: list[int] = [60, 300, 1800]
+    paragraph_pause_s: float = 1.8   # Pause zwischen Cues ab der ein neuer Absatz beginnt, 0 = aus
+    chapter_headings: bool = True    # YouTube-Kapitel (falls vorhanden) als Überschriften einfügen
 
 
 class FiltersCfg(BaseModel):

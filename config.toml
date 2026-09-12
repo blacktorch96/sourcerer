@@ -11,11 +11,13 @@ delay_between_s     = 2.0    # Höflichkeitspause zwischen Feed-Abrufen
 use_conditional_get = true   # ETag / If-Modified-Since
 
 [transcripts]
-prefer_original  = true           # immer Originalsprache des Videos, nie Auto-Übersetzung
-languages        = ["en", "de"]   # nur Fallback, falls Originalsprache unbestimmbar
-prefer_manual    = true           # manuelle vor Auto-Captions
-max_attempts     = 3
-retry_backoff_s  = [60, 300, 1800]
+prefer_original   = true           # immer Originalsprache des Videos, nie Auto-Übersetzung
+languages         = ["en", "de"]   # nur Fallback, falls Originalsprache unbestimmbar
+prefer_manual     = true           # manuelle vor Auto-Captions
+max_attempts      = 3
+retry_backoff_s   = [60, 300, 1800]
+paragraph_pause_s = 1.8            # Sprechpause zwischen Cues ab der ein neuer Absatz beginnt, 0 = aus
+chapter_headings  = true           # YouTube-Kapitel (falls vorhanden) als Überschriften einfügen
 
 [filters]
 min_duration_min = 8              # kürzere Videos überspringen (Shorts, Clips)

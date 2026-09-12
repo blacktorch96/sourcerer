@@ -283,6 +283,8 @@ class Pipeline:
                 meta, self.cfg.transcripts.languages,
                 prefer_manual=self.cfg.transcripts.prefer_manual,
                 prefer_original=self.cfg.transcripts.prefer_original,
+                paragraph_pause_s=self.cfg.transcripts.paragraph_pause_s,
+                chapter_headings=self.cfg.transcripts.chapter_headings,
             )
 
         if result is None:

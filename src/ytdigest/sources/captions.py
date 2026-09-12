@@ -128,8 +128,8 @@ def _download_track(tracks: list[dict]) -> str | None:
     return None
 
 
-def _try_source(available: dict[str, list], tag: str, languages: list[str],
-                ) -> TranscriptResult | None:
+def _try_source(available: dict[str, list], tag: str, languages: list[str], *,
+                pause_s: float, chapters: list[dict] | None) -> TranscriptResult | None:
     for lang in languages:
         code = _match_lang(available, lang)
         if code is None:
@@ -137,13 +137,14 @@ def _try_source(available: dict[str, list], tag: str, languages: list[str],
         text = _download_track(available[code])
         if not text:
             continue
-        body = vtt_to_text(text)
+        body = vtt_to_text(text, pause_s=pause_s, chapters=chapters)
         if body:
             return TranscriptResult(text=body, source=tag, language=lang)
     return None
 
 
-def _fetch_original(probe_result: VideoProbe) -> TranscriptResult | None:
+def _fetch_original(probe_result: VideoProbe, *, pause_s: float,
+                    chapters: list[dict] | None) -> TranscriptResult | None:
     """Nur die tatsächliche Sprache des Videos versuchen (manuell, dann echte
     ASR-Originalspur) - niemals eine auto-übersetzte Spur. Liefert None,
     wenn die Originalsprache nicht als Untertitel verfügbar ist; der Aufrufer
@@ -155,7 +156,8 @@ def _fetch_original(probe_result: VideoProbe) -> TranscriptResult | None:
     manual = info.get("subtitles") or {}
     auto = info.get("automatic_captions") or {}
 
-    result = _try_source(manual, "captions_manual", [original])
+    result = _try_source(manual, "captions_manual", [original],
+                         pause_s=pause_s, chapters=chapters)
     if result:
         return result
 
@@ -163,13 +165,14 @@ def _fetch_original(probe_result: VideoProbe) -> TranscriptResult | None:
     if orig_key in auto:
         text = _download_track(auto[orig_key])
         if text:
-            body = vtt_to_text(text)
+            body = vtt_to_text(text, pause_s=pause_s, chapters=chapters)
             if body:
                 return TranscriptResult(text=body, source="captions_auto", language=original)
     elif not any(code.endswith(_ORIG_SUFFIX) for code in auto) and original in auto:
         # Kein Video mit -orig-Markierung (altes/anderes Feed-Format) - der
         # unübersetzte Code kann hier noch vertrauenswürdig sein.
-        result = _try_source(auto, "captions_auto", [original])
+        result = _try_source(auto, "captions_auto", [original],
+                             pause_s=pause_s, chapters=chapters)
         if result:
             return result
     return None
@@ -177,9 +180,13 @@ def _fetch_original(probe_result: VideoProbe) -> TranscriptResult | None:
 
 def fetch_captions(probe_result: VideoProbe, languages: list[str], *,
                    prefer_manual: bool = True,
-                   prefer_original: bool = True) -> TranscriptResult | None:
+                   prefer_original: bool = True,
+                   paragraph_pause_s: float = 1.8,
+                   chapter_headings: bool = True) -> TranscriptResult | None:
+    chapters = probe_result.info.get("chapters") if chapter_headings else None
+
     if prefer_original:
-        result = _fetch_original(probe_result)
+        result = _fetch_original(probe_result, pause_s=paragraph_pause_s, chapters=chapters)
         if result:
             return result
         # Originalsprache nicht als Untertitel verfügbar: nicht auf eine
@@ -193,13 +200,17 @@ def fetch_captions(probe_result: VideoProbe, languages: list[str], *,
 
     if prefer_manual:
         # alle Sprachen manuell, danach alle Sprachen auto
-        return (_try_source(manual, "captions_manual", languages)
-                or _try_source(auto, "captions_auto", languages))
+        return (_try_source(manual, "captions_manual", languages,
+                            pause_s=paragraph_pause_s, chapters=chapters)
+                or _try_source(auto, "captions_auto", languages,
+                               pause_s=paragraph_pause_s, chapters=chapters))
 
     # je Sprache erst manuell, dann auto
     for lang in languages:
-        result = (_try_source(manual, "captions_manual", [lang])
-                  or _try_source(auto, "captions_auto", [lang]))
+        result = (_try_source(manual, "captions_manual", [lang],
+                              pause_s=paragraph_pause_s, chapters=chapters)
+                  or _try_source(auto, "captions_auto", [lang],
+                                 pause_s=paragraph_pause_s, chapters=chapters))
         if result:
             return result
     return None

@@ -47,12 +47,23 @@ bleibt, wird es beim Speichern automatisch umgebrochen:
   `paragraph_pause_s` Sekunden (Default: `1.8`, konfigurierbar unter
   `[asr]` in `config.toml`, `0` deaktiviert das), beginnt ein neuer Absatz
   (Leerzeile). Das deutet meist auf einen Themen- oder Sprecherwechsel hin.
-  Bei Caption-Spuren entfällt das, da dort keine Segment-Timings verarbeitet
-  werden.
+- Im Caption-Pfad (VTT) gilt dasselbe Prinzip anhand der Cue-Zeitstempel:
+  `transcripts.paragraph_pause_s` (Default: `1.8`, `0` deaktiviert das) legt
+  fest, ab welcher Lücke zwischen zwei Cues ein neuer Absatz beginnt.
+  Wiederholte Cues rollierender Auto-Captions (derselbe Text über mehrere
+  Cues, bis die nächste Phrase angehängt wird) zählen dabei nicht als Pause.
+- Hat das Video echte YouTube-Kapitel, fügt der Caption-Pfad zusätzlich
+  sparsame Überschriften ein (`## 12:34 Kapiteltitel`), gesteuert über
+  `transcripts.chapter_headings` (Default: `true`). An einer Kapitelgrenze
+  wird kein zusätzlicher Pausen-Absatz mehr gesetzt - die Überschrift trennt
+  bereits, damit die Ausgabe nicht mit doppelten Markern überladen wird.
+  Ohne Kapitelmetadaten (der Regelfall) entfällt das und es bleibt bei der
+  reinen Pausen-Gliederung.
 
-Implementiert in [asr.py](src/ytdigest/sources/asr.py) (`_to_paragraphs`,
-Absatzbildung) und [reflow.py](src/ytdigest/reflow.py) (`wrap_transcript`,
-Zeilenumbruch je Absatz); aufgerufen in [storage.py](src/ytdigest/storage.py)
+Implementiert in [asr.py](src/ytdigest/sources/asr.py) (`_to_paragraphs`) für
+ASR, [vtt.py](src/ytdigest/sources/vtt.py) (`vtt_to_text`) für Captions/Kapitel
+und [reflow.py](src/ytdigest/reflow.py) (`wrap_transcript`) für den
+Zeilenumbruch je Absatz; aufgerufen in [storage.py](src/ytdigest/storage.py)
 beim Ablegen des Transkripts.
 
 ## Wartung
