@@ -27,6 +27,7 @@ device           = "cuda"         # "cuda" | "cpu" | "auto"
 compute_type     = "float16"
 beam_size        = 5
 max_duration_min = 90             # längere Videos nicht per ASR verarbeiten
+paragraph_pause_s = 1.8            # Sprechpause ab der ein neuer Absatz beginnt, 0 = aus
 
 [output]
 include_video_id  = false   # true = Video-ID immer an den Dateinamen hängen

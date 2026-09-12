@@ -50,6 +50,7 @@ class AsrCfg(BaseModel):
     compute_type: str = "float16"
     beam_size: int = 5
     max_duration_min: int = 90
+    paragraph_pause_s: float = 1.8   # Sprechpause ab der ein neuer Absatz beginnt, 0 = aus
 
 
 class OutputCfg(BaseModel):

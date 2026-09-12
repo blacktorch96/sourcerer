@@ -51,13 +51,30 @@ def _download_audio(url: str, workdir: Path) -> Path:
     return files[0]
 
 
-def _to_paragraphs(segments) -> str:
-    parts: list[str] = []
+def _to_paragraphs(segments, *, pause_s: float) -> str:
+    """Segmente zu Fließtext zusammenfügen, mit Absatzumbruch bei Sprechpausen.
+
+    faster-whisper liefert je Segment ``start``/``end`` in Sekunden. Eine
+    Lücke von mindestens ``pause_s`` zwischen zwei Segmenten deutet meist auf
+    einen Themen-/Sprecherwechsel hin und wird als Absatzgrenze (Leerzeile)
+    übernommen statt die Segmente einfach zu einem Block zusammenzukleben.
+    """
+    paragraphs: list[str] = []
+    current: list[str] = []
+    prev_end: float | None = None
     for seg in segments:
         text = seg.text.strip()
-        if text:
-            parts.append(text)
-    return " ".join(parts).strip()
+        if not text:
+            continue
+        if (pause_s > 0 and prev_end is not None
+                and seg.start - prev_end >= pause_s and current):
+            paragraphs.append(" ".join(current))
+            current = []
+        current.append(text)
+        prev_end = seg.end
+    if current:
+        paragraphs.append(" ".join(current))
+    return "\n\n".join(paragraphs).strip()
 
 
 def transcribe(url: str, *, cfg: AsrCfg, temp_dir: str | None) -> TranscriptResult | None:
@@ -77,7 +94,7 @@ def transcribe(url: str, *, cfg: AsrCfg, temp_dir: str | None) -> TranscriptResu
 
         model = WhisperModel(cfg.model, device=device, compute_type=compute_type)
         segments, info = model.transcribe(str(audio_path), beam_size=cfg.beam_size)
-        text = _to_paragraphs(segments)
+        text = _to_paragraphs(segments, pause_s=cfg.paragraph_pause_s)
         if not text:
             return None
         return TranscriptResult(
