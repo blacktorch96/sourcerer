@@ -9,8 +9,9 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from ytdigest.config import Config
 from ytdigest.db.repo import Repo, iso_utc
@@ -19,7 +20,7 @@ from ytdigest.feeds.parser import feed_url_for_channel, parse_feeds_file
 from ytdigest.gdrive import DriveUploader, GDriveUnavailable
 from ytdigest.models import Feed, FeedEntry, RunReport, Video
 from ytdigest.naming import slugify
-from ytdigest.sources import asr, captions
+from ytdigest.sources import asr, captions, local
 from ytdigest.storage import write_transcript
 
 log = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ class RunOptions:
     asr_only: bool = False
     sync_only: bool = False
     dry_run: bool = False
+    delete_source_on_success: bool = False  # nur relevant für lokale Videos
 
 
 def _now() -> datetime:
@@ -70,6 +72,62 @@ class Pipeline:
 
         report.runtime_s = time.monotonic() - started
         return report
+
+    # ------------------------------------------------------------ run_local
+    def run_local(self, root: Path, opts: RunOptions) -> RunReport:
+        """Pendant zu ``run()`` für ``ytdigest local scan``: Verzeichnis nach
+        Unterordner-Kanälen durchsuchen (``local_sync``), dann nur die dabei
+        gefundenen Kanäle verarbeiten - andere, evtl. noch offene Feed-Videos
+        bleiben unangetastet."""
+        report = RunReport()
+        started = time.monotonic()
+
+        reset = self.repo.reset_processing()
+        if reset:
+            log.info("%d Video(s) aus 'processing' auf 'discovered' zurückgesetzt", reset)
+
+        channel_dirs = list(local.iter_channel_dirs(root))
+        self.local_sync(channel_dirs, report)
+
+        if not opts.sync_only and channel_dirs:
+            scoped = replace(opts, feed_channel_ids=[d.name for d in channel_dirs])
+            self.process(scoped, report)
+
+        report.runtime_s = time.monotonic() - started
+        return report
+
+    def local_sync(self, channel_dirs: list[Path], report: RunReport) -> None:
+        cfg_local = self.cfg.local
+        used_slugs = {f.dir_slug for f in self.repo.list_feeds()}
+
+        for channel_dir in channel_dirs:
+            channel_id = channel_dir.name
+            feed = self.repo.get_feed_by_channel_id(channel_id)
+            if feed is None:
+                slug = self._unique_slug(channel_id, used_slugs)
+                used_slugs.add(slug)
+                feed = self.repo.create_feed(
+                    channel_id=channel_id, feed_url=local.feed_url_for(channel_dir),
+                    dir_slug=slug, channel_title=channel_id, display_name=None,
+                    resolved_from="local",
+                )
+                log.info("Neuer lokaler Kanal: %s -> %s", channel_id, slug)
+            report.feeds_checked += 1
+
+            for path in local.iter_video_files(channel_dir, cfg_local.extensions):
+                video_id = f"{channel_id}/{path.name}"
+                if self.repo.video_exists(video_id):
+                    continue
+                if not local.is_settled(path, min_age_s=cfg_local.min_age_s):
+                    log.debug("Noch zu frisch, überspringe vorerst: %s", path)
+                    continue
+                entry = FeedEntry(
+                    video_id=video_id, title=path.stem,
+                    published_at=local.creation_time(path),
+                    url=str(path.resolve()),
+                )
+                self.repo.add_video(entry, feed.id, status="discovered")
+                report.new_videos += 1
 
     # ----------------------------------------------------------------- sync
     def sync(self, opts: RunOptions, report: RunReport) -> None:
@@ -260,8 +318,9 @@ class Pipeline:
 
         self.repo.mark_processing(video.video_id)
         current = self.repo.get_video(video.video_id) or video
+        is_local = local.is_local_feed(feed.feed_url)
 
-        meta = captions.probe(video.url)
+        meta = local.probe(Path(video.url)) if is_local else captions.probe(video.url)
         if meta.error:
             self._fail(current, meta.error, report)
             return
@@ -278,7 +337,7 @@ class Pipeline:
             return
 
         result = None
-        if not opts.asr_only:
+        if not opts.asr_only and not is_local:
             result = captions.fetch_captions(
                 meta, self.cfg.transcripts.languages,
                 prefer_manual=self.cfg.transcripts.prefer_manual,
@@ -288,7 +347,7 @@ class Pipeline:
             )
 
         if result is None:
-            result = self._try_asr(current, meta, opts)
+            result = self._try_asr(current, meta, opts, is_local=is_local)
 
         if result is None:
             self.repo.set_no_transcript(video.video_id)
@@ -307,7 +366,10 @@ class Pipeline:
             report.via_captions += 1
         log.info("Fertig (%s): %s", result.source, video.title)
 
-    def _try_asr(self, video: Video, meta, opts: RunOptions):
+        if is_local and opts.delete_source_on_success:
+            self._delete_source(current)
+
+    def _try_asr(self, video: Video, meta, opts: RunOptions, *, is_local: bool = False):
         if opts.no_asr or not self.cfg.asr.enabled:
             return None
         max_seconds = self.cfg.asr.max_duration_min * 60
@@ -315,6 +377,8 @@ class Pipeline:
             log.info("ASR übersprungen (zu lang, %ds): %s", meta.duration_s, video.title)
             return None
         try:
+            if is_local:
+                return asr.transcribe_local(Path(video.url), cfg=self.cfg.asr)
             return asr.transcribe(
                 video.url, cfg=self.cfg.asr,
                 temp_dir=self.cfg.paths.temp_dir or None,
@@ -322,6 +386,16 @@ class Pipeline:
         except asr.AsrUnavailable as exc:
             log.warning("ASR nicht verfügbar: %s", exc)
             return None
+
+    def _delete_source(self, video: Video) -> None:
+        """Quelldatei nach erfolgreicher Transkription löschen (nur mit
+        ``--delete-after-success`` bei ``local scan``, nie automatisch)."""
+        path = Path(video.url)
+        try:
+            path.unlink()
+            log.info("Quelldatei gelöscht: %s", path)
+        except OSError as exc:
+            log.warning("Quelldatei konnte nicht gelöscht werden (%s): %s", path, exc)
 
     def _upload_to_drive(self, feed: Feed, tpath: str, mpath: str) -> None:
         """Lädt Transkript (+ Sidecar) nach Google Drive hoch, falls konfiguriert.

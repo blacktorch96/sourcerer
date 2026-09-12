@@ -23,19 +23,23 @@ chapter_headings  = true           # YouTube-Kapitel (falls vorhanden) als Über
 min_duration_min = 8              # kürzere Videos überspringen (Shorts, Clips)
 
 [asr]
-enabled          = true
-model            = "large-v3"
-device           = "cuda"         # "cuda" | "cpu" | "auto"
-compute_type     = "float16"
-beam_size        = 5
-max_duration_min = 90             # längere Videos nicht per ASR verarbeiten
-paragraph_pause_s = 1.8            # Sprechpause ab der ein neuer Absatz beginnt, 0 = aus
+enabled           = true
+model             = "large-v3"
+device            = "cuda"        # "cuda" | "cpu" | "auto"
+compute_type      = "float16"
+beam_size         = 5
+max_duration_min  = 90            # längere Videos nicht per ASR verarbeiten
+paragraph_pause_s = 1.8           # Sprechpause ab der ein neuer Absatz beginnt, 0 = aus
 
 [output]
 include_video_id  = false   # true = Video-ID immer an den Dateinamen hängen
 max_filename_len  = 120
 timestamp_source  = "published_utc"
 line_width        = 120     # Zeilenumbruch im Transkript-Text, 0 = kein Umbruch
+
+[local]
+extensions = ["mp4", "mkv", "webm", "mov", "avi", "m4v"]  # per "ytdigest local scan" berücksichtigte Endungen
+min_age_s  = 30    # Datei muss so lange unverändert sein (wartet laufende Kopiervorgänge ab)
 
 [gdrive]
 enabled              = false                       # true = Transkripte zusätzlich nach Google Drive hochladen

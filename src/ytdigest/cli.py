@@ -24,6 +24,8 @@ from ytdigest.pipeline import INITIAL_MODES, Pipeline, RunOptions
 app = typer.Typer(add_completion=False, help="YouTube-Feed-Überwachung und Transkriptbeschaffung.")
 feeds_app = typer.Typer(help="Feed-Liste verwalten.")
 app.add_typer(feeds_app, name="feeds")
+local_app = typer.Typer(help="Lokale Videodateien scannen und transkribieren.")
+app.add_typer(local_app, name="local")
 console = Console()
 
 EXIT_OK = 0
@@ -270,6 +272,61 @@ def feeds_add(source: str = typer.Argument(..., help="URL, Kanal-ID oder @handle
         Pipeline(state.cfg, conn).run(RunOptions(sync_only=True))
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------- local scan
+@local_app.command("scan")
+def local_scan(
+    directory: Path = typer.Argument(..., help="Wurzelverzeichnis; Unterordner = Kanäle"),
+    limit: int | None = typer.Option(None, "--limit", help="max. Videos pro Lauf"),
+    delete_after_success: bool = typer.Option(
+        False, "--delete-after-success",
+        help="Quelldatei nach erfolgreicher Transkription löschen"),
+    no_asr: bool = typer.Option(False, "--no-asr", help="ASR deaktivieren (nur scannen/einplanen)"),
+    sync_only: bool = typer.Option(False, "--sync-only", help="nur scannen, nicht transkribieren"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="nichts schreiben/löschen"),
+) -> None:
+    """Verzeichnis nach lokalen Videos durchsuchen und per ASR transkribieren.
+
+    Erwartet: <directory>/<kanal>/<datei>.<ext> - je Unterordner ein Kanal,
+    Videodateien direkt darin. Details siehe README.
+    """
+    if not directory.is_dir():
+        console.print(f"[red]Kein Verzeichnis:[/red] {directory}")
+        raise typer.Exit(EXIT_CONFIG)
+
+    cfg = state.cfg
+    effective_no_asr = no_asr
+    if cfg.asr.enabled and not no_asr and not sync_only and shutil.which("ffmpeg") is None:
+        console.print("[yellow]ffmpeg nicht gefunden — ASR-Pfad wird für diesen "
+                      "Lauf übersprungen.[/yellow]")
+        effective_no_asr = True
+    if not sync_only and shutil.which("ffprobe") is None:
+        console.print("[red]ffprobe nicht gefunden — für lokale Videos zwingend nötig "
+                      "(kommt mit ffmpeg mit).[/red]")
+        raise typer.Exit(EXIT_CONFIG)
+
+    opts = RunOptions(
+        limit=limit, no_asr=effective_no_asr, sync_only=sync_only, dry_run=dry_run,
+        delete_source_on_success=delete_after_success,
+    )
+
+    try:
+        with single_instance(_lock_path()):
+            conn = _open_db()
+            try:
+                report = Pipeline(cfg, conn).run_local(directory, opts)
+            finally:
+                conn.close()
+    except LockHeld:
+        console.print("[red]Ein anderer Lauf hält bereits das Lock.[/red]")
+        raise typer.Exit(EXIT_LOCKED) from None
+    except KeyboardInterrupt:
+        console.print("[yellow]Abgebrochen.[/yellow]")
+        raise typer.Exit(EXIT_INTERRUPTED) from None
+
+    _print_report(report)
+    raise typer.Exit(report.exit_code)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -62,6 +62,12 @@ class OutputCfg(BaseModel):
     line_width: int = 120   # Zeilenumbruch im Transkript-Text, 0 = kein Umbruch
 
 
+class LocalCfg(BaseModel):
+    extensions: list[str] = ["mp4", "mkv", "webm", "mov", "avi", "m4v"]
+    min_age_s: int = 30   # Datei muss seit mind. so vielen Sekunden unverändert sein
+                          # (wartet einen laufenden Kopiervorgang ab)
+
+
 class GDriveCfg(BaseModel):
     enabled: bool = False
     service_account_file: Path = Path("service_account.json")
@@ -77,6 +83,7 @@ class Config(BaseModel):
     filters: FiltersCfg = Field(default_factory=FiltersCfg)
     asr: AsrCfg = Field(default_factory=AsrCfg)
     output: OutputCfg = Field(default_factory=OutputCfg)
+    local: LocalCfg = Field(default_factory=LocalCfg)
     gdrive: GDriveCfg = Field(default_factory=GDriveCfg)
 
     source_path: Path | None = None

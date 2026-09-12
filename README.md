@@ -3,7 +3,8 @@
 Plattformübergreifendes Python-CLI, das YouTube-RSS-Feeds überwacht, Transkripte
 neuer Videos beschafft (vorhandene Untertitel, sonst lokale Spracherkennung via
 faster-whisper) und sie dateibasiert in einer kanalbasierten Verzeichnisstruktur
-ablegt.
+ablegt. Daneben kann `local scan` dieselbe Pipeline auch auf lokal abgelegte
+Videodateien anwenden.
 
 Details in [spec.md](spec.md).
 
@@ -28,6 +29,46 @@ uv run ytdigest retry                 # fehlgeschlagene Videos neu einplanen
 
 `run` eignet sich für Cron / Task Scheduler. Exit-Code 0 = sauber, 1 = mindestens
 ein Video fehlgeschlagen, 2 = Startfehler, 3 = anderer Lauf hält das Lock.
+
+## Lokale Videodateien
+
+```bash
+uv run ytdigest local scan video/                    # scannen + transkribieren
+uv run ytdigest local scan video/ --sync-only         # nur einplanen, nicht transkribieren
+uv run ytdigest local scan video/ --delete-after-success  # Quelldatei danach löschen
+```
+
+Erwartetes Layout: `<verzeichnis>/<kanal>/<datei>.<ext>` - jeder direkte
+Unterordner von `<verzeichnis>` ist ein "Kanal" (wird als `channel_id`/`dir_slug`
+übernommen, landet also im selben Output-Layout wie YouTube-Kanäle), Videodateien
+liegen direkt darin (eine Ebene, keine weitere Verschachtelung).
+
+- **Identität:** `video_id = "<kanal>/<dateiname>"`. Wird eine Datei umbenannt
+  oder in einen anderen Kanalordner verschoben, gilt sie als neues Video und
+  wird erneut transkribiert.
+- **`published_at`:** zuerst die in den Container-Metadaten eingebettete
+  `creation_time` (meist das echte Aufnahme-/Exportdatum), sonst die
+  Datei-Erstellungszeit. Unter Windows ist das zuverlässig; unter Linux/macOS
+  ohne `st_birthtime` ist die Dateisystem-Erstellungszeit nur ein Fallback
+  zweiter Wahl (dort eigentlich die letzte Metadatenänderung).
+- **Immer ASR:** kein Untertitel-Sidecar-Support (`.srt`/`.vtt` neben der
+  Videodatei) - lokale Dateien laufen ausschließlich über faster-whisper,
+  direkt auf der Datei (kein Audio-Download-Umweg wie beim YouTube-Pfad).
+  Dauer kommt per `ffprobe` (Pflicht im `PATH`, kommt mit `ffmpeg` mit).
+- **Anlaufzeit:** eine Datei wird erst aufgenommen, wenn sie seit mindestens
+  `local.min_age_s` Sekunden (Default `30`) unverändert ist - Schutz gegen
+  das Anfassen einer noch laufenden Kopie. Zu junge Dateien werden beim
+  nächsten Scan erneut geprüft.
+- **Löschen** passiert nur mit explizitem `--delete-after-success`, und erst
+  nachdem das Transkript geschrieben und in der Datenbank als `done` vermerkt
+  ist - nie vor gesichertem Erfolg, nie automatisch.
+- Berücksichtigte Endungen: `local.extensions` in `config.toml` (Default
+  `mp4, mkv, webm, mov, avi, m4v`).
+
+Läuft über dieselbe Datenbank/Zustandsmaschine wie der Feed-Pfad - `status`,
+`retry` und `feeds list` funktionieren also auch für lokale Kanäle.
+`local scan` verarbeitet dabei ausschließlich die unter `<verzeichnis>`
+gefundenen Kanäle, nie anderweitig offen liegende Feed-Videos.
 
 ## Formatierung einzeiliger Transkripte
 
