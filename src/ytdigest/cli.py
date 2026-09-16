@@ -189,15 +189,20 @@ def status() -> None:
 def retry(
     no_transcript: bool = typer.Option(False, "--no-transcript",
                                        help="auch no_transcript-Videos neu einplanen"),
+    skipped: bool = typer.Option(False, "--skipped",
+                                 help="auch anfangs übersprungene Videos (initial_sync, "
+                                      "z. B. ältere Podcast-Folgen) neu einplanen"),
     feed: list[str] = typer.Option([], "--feed", help="auf Kanal-IDs einschränken"),
 ) -> None:
-    """Fehlgeschlagene Videos neu einplanen."""
+    """Fehlgeschlagene bzw. übersprungene Videos neu einplanen."""
     conn = _open_db()
     repo = Repo(conn)
     feed_ids = None
     if feed:
         feed_ids = [f.id for cid in feed if (f := repo.get_feed_by_channel_id(cid))]
     n = repo.requeue_failed(include_no_transcript=no_transcript, feed_ids=feed_ids)
+    if skipped:
+        n += repo.requeue_skipped(feed_ids=feed_ids)
     conn.close()
     console.print(f"[green]{n}[/green] Video(s) auf 'discovered' zurückgesetzt.")
 

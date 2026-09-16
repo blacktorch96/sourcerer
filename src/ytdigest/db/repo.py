@@ -289,3 +289,18 @@ class Repo:
             sql += f" AND feed_id IN ({','.join('?' * len(feed_ids))})"
             params.extend(feed_ids)
         return self.conn.execute(sql, params).rowcount
+
+    def requeue_skipped(self, *, reason: str = "initial_sync",
+                        feed_ids: list[int] | None = None) -> int:
+        """Setzt anfangs übersprungene Videos (z. B. Podcast-Folgen, die beim
+        ersten Sync im Modus 'latest' nicht gewählt wurden) auf 'discovered'
+        zurück, damit sie nachträglich verarbeitet werden."""
+        sql = (
+            "UPDATE videos SET status = 'discovered', skip_reason = NULL, "
+            "attempts = 0 WHERE status = 'skipped' AND skip_reason = ?"
+        )
+        params: list = [reason]
+        if feed_ids:
+            sql += f" AND feed_id IN ({','.join('?' * len(feed_ids))})"
+            params.extend(feed_ids)
+        return self.conn.execute(sql, params).rowcount
