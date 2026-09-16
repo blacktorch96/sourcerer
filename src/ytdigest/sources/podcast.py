@@ -22,6 +22,14 @@ log = logging.getLogger(__name__)
 
 PODCAST_CHANNEL_PREFIX = "podcast:"
 _DOWNLOAD_TIMEOUT_S = 300.0
+# Hosts wie Buzzsprout blocken den httpx-Standard-User-Agent ("python-httpx/…")
+# mit 403 - ein browserähnlicher UA kommt durch.
+_DOWNLOAD_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+}
 
 
 def channel_id_for(feed_url: str) -> str:
@@ -43,7 +51,10 @@ def probe(duration_s: int | None) -> VideoProbe:
 def _download_audio(url: str, workdir: Path) -> Path:
     suffix = Path(url.split("?", 1)[0]).suffix or ".audio"
     target = workdir / f"episode{suffix}"
-    with httpx.stream("GET", url, timeout=_DOWNLOAD_TIMEOUT_S, follow_redirects=True) as resp:
+    with httpx.stream(
+        "GET", url, headers=_DOWNLOAD_HEADERS,
+        timeout=_DOWNLOAD_TIMEOUT_S, follow_redirects=True,
+    ) as resp:
         resp.raise_for_status()
         with open(target, "wb") as fh:
             for chunk in resp.iter_bytes():
