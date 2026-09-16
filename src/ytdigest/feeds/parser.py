@@ -11,6 +11,7 @@ CHANNEL_ID_RE = re.compile(r"^UC[0-9A-Za-z_-]{22}$")
 _VIDEOS_XML_RE = re.compile(r"youtube\.com/feeds/videos\.xml", re.IGNORECASE)
 _CHANNEL_ID_IN_URL = re.compile(r"[?&]channel_id=(UC[0-9A-Za-z_-]{22})")
 _HANDLE_RE = re.compile(r"^@[\w.-]+$")
+_PODCAST_PREFIX_RE = re.compile(r"^podcast:\s*", re.IGNORECASE)
 
 
 def feed_url_for_channel(channel_id: str) -> str:
@@ -28,6 +29,12 @@ def parse_line(raw: str) -> ParsedFeedLine | None:
         left, _, right = line.partition("|")
         line = left.strip()
         display_name = right.strip() or None
+
+    if _PODCAST_PREFIX_RE.match(line):
+        url = _PODCAST_PREFIX_RE.sub("", line, count=1).strip()
+        if not url:
+            raise ValueError(f"Podcast-Zeile ohne URL: {raw!r}")
+        return ParsedFeedLine(raw=raw, podcast_url=url, display_name=display_name)
 
     if _VIDEOS_XML_RE.search(line):
         match = _CHANNEL_ID_IN_URL.search(line)
@@ -69,7 +76,8 @@ def parse_feeds_file(path: Path) -> list[ParsedFeedLine]:
         parsed = parse_line(raw)
         if parsed is None:
             continue
-        key = parsed.feed_url or parsed.channel_id or parsed.handle or parsed.raw
+        key = (parsed.feed_url or parsed.channel_id or parsed.handle
+               or parsed.podcast_url or parsed.raw)
         if key in seen:
             continue
         seen.add(key)

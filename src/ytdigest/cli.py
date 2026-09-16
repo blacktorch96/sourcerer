@@ -21,7 +21,8 @@ from ytdigest.locking import LockHeld, single_instance
 from ytdigest.logsetup import setup_logging
 from ytdigest.pipeline import INITIAL_MODES, Pipeline, RunOptions
 
-app = typer.Typer(add_completion=False, help="YouTube-Feed-Überwachung und Transkriptbeschaffung.")
+app = typer.Typer(add_completion=False,
+                  help="YouTube- und Podcast-Feed-Überwachung und Transkriptbeschaffung.")
 feeds_app = typer.Typer(help="Feed-Liste verwalten.")
 app.add_typer(feeds_app, name="feeds")
 local_app = typer.Typer(help="Lokale Videodateien scannen und transkribieren.")
@@ -248,7 +249,8 @@ def feeds_list() -> None:
 
 
 @feeds_app.command("add")
-def feeds_add(source: str = typer.Argument(..., help="URL, Kanal-ID oder @handle"),
+def feeds_add(source: str = typer.Argument(
+                  ..., help="URL, Kanal-ID, @handle oder 'podcast:<RSS-URL>'"),
               name: str | None = typer.Option(None, "--name", help="Anzeigename")) -> None:
     """Zeile an feeds.txt anhängen und syncen."""
     line = f"{source} | {name}" if name else source

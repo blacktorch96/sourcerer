@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Mein Test-Podcast</title>
+    <link>https://example.com/podcast</link>
+    <description>Ein Beispiel-Feed für Tests.</description>
+    <item>
+      <title>Folge 2: Die zweite</title>
+      <guid isPermaLink="false">episode-2-guid</guid>
+      <pubDate>Sun, 30 Aug 2026 08:00:00 +0000</pubDate>
+      <itunes:duration>00:42:15</itunes:duration>
+      <enclosure url="https://cdn.example.com/audio/episode2.mp3" type="audio/mpeg" length="12345"/>
+    </item>
+    <item>
+      <title>Folge 1: Die erste</title>
+      <guid isPermaLink="false">episode-1-guid</guid>
+      <pubDate>Sun, 23 Aug 2026 08:00:00 +0000</pubDate>
+      <itunes:duration>1500</itunes:duration>
+      <enclosure url="https://cdn.example.com/audio/episode1.mp3" type="audio/mpeg" length="9876"/>
+    </item>
+  </channel>
+</rss>

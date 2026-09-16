@@ -14,6 +14,7 @@ class ParsedFeedLine:
     channel_id: str | None = None      # gesetzt, wenn direkt bekannt
     feed_url: str | None = None         # gesetzt, wenn direkt bekannt
     handle: str | None = None           # '@name' oder Kanal-URL, muss aufgelöst werden
+    podcast_url: str | None = None      # 'podcast:<url>'-Zeile: normale Podcast-RSS
     display_name: str | None = None     # Override für den Verzeichnisnamen
 
 
@@ -46,6 +47,8 @@ class FeedEntry:
     url: str
     channel_id: str | None = None
     channel_title: str | None = None
+    duration_s: int | None = None       # nur gesetzt, wenn schon im Feed bekannt
+                                         # (z. B. itunes:duration)
 
 
 @dataclass(slots=True)
