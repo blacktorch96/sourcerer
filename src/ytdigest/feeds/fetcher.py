@@ -27,7 +27,7 @@ class FeedFetchResult:
     error: str | None = None
 
 
-def _entry_datetime(entry) -> datetime:
+def entry_datetime(entry) -> datetime:
     parsed = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
     if parsed is None:
         return datetime.now(UTC)
@@ -61,7 +61,7 @@ def _parse_atom(body: bytes) -> tuple[str | None, str | None, list[FeedEntry]]:
             FeedEntry(
                 video_id=video_id,
                 title=item.get("title", "").strip() or video_id,
-                published_at=_entry_datetime(item),
+                published_at=entry_datetime(item),
                 url=item.get("link") or f"https://www.youtube.com/watch?v={video_id}",
                 channel_id=_normalise_channel_id(item.get("yt_channelid")),
                 channel_title=channel_title,
@@ -71,9 +71,14 @@ def _parse_atom(body: bytes) -> tuple[str | None, str | None, list[FeedEntry]]:
     return channel_id, channel_title, entries
 
 
-def fetch_feed(feed_url: str, *, timeout_s: float, etag: str | None = None,
-               last_modified: str | None = None,
-               conditional: bool = True) -> FeedFetchResult:
+def get_conditional(
+    url: str, *, timeout_s: float, etag: str | None = None,
+    last_modified: str | None = None, conditional: bool = True,
+) -> tuple[httpx.Response | None, FeedFetchResult | None]:
+    """Gemeinsame HTTP-Grundlage für Feed-Abrufe (YouTube-Atom wie Podcast-RSS):
+    Conditional-GET-Header setzen, Statuscodes auf FeedFetchResult-Fehler
+    abbilden. Bei Erfolg (200) kommt die Response zurück, sonst None plus
+    fertigem Fehler-/304-Ergebnis."""
     headers = {"User-Agent": _USER_AGENT}
     if conditional and etag:
         headers["If-None-Match"] = etag
@@ -81,17 +86,27 @@ def fetch_feed(feed_url: str, *, timeout_s: float, etag: str | None = None,
         headers["If-Modified-Since"] = last_modified
 
     try:
-        resp = httpx.get(feed_url, headers=headers, timeout=timeout_s,
-                         follow_redirects=True)
+        resp = httpx.get(url, headers=headers, timeout=timeout_s, follow_redirects=True)
     except httpx.HTTPError as exc:
-        return FeedFetchResult(error=f"http_error: {exc}")
+        return None, FeedFetchResult(error=f"http_error: {exc}")
 
     if resp.status_code == 304:
-        return FeedFetchResult(not_modified=True, etag=etag, last_modified=last_modified)
+        return None, FeedFetchResult(not_modified=True, etag=etag, last_modified=last_modified)
     if resp.status_code in (403, 429):
-        return FeedFetchResult(error=f"rate_limited ({resp.status_code})")
+        return None, FeedFetchResult(error=f"rate_limited ({resp.status_code})")
     if resp.status_code >= 400:
-        return FeedFetchResult(error=f"http_{resp.status_code}")
+        return None, FeedFetchResult(error=f"http_{resp.status_code}")
+    return resp, None
+
+
+def fetch_feed(feed_url: str, *, timeout_s: float, etag: str | None = None,
+               last_modified: str | None = None,
+               conditional: bool = True) -> FeedFetchResult:
+    resp, error = get_conditional(feed_url, timeout_s=timeout_s, etag=etag,
+                                  last_modified=last_modified, conditional=conditional)
+    if error is not None:
+        return error
+    assert resp is not None  # get_conditional: error is None <=> resp gesetzt
 
     channel_id, channel_title, entries = _parse_atom(resp.content)
     return FeedFetchResult(

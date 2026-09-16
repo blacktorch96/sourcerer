@@ -70,6 +70,36 @@ Läuft über dieselbe Datenbank/Zustandsmaschine wie der Feed-Pfad - `status`,
 `local scan` verarbeitet dabei ausschließlich die unter `<verzeichnis>`
 gefundenen Kanäle, nie anderweitig offen liegende Feed-Videos.
 
+## Podcasts
+
+Neben YouTube-Kanälen kann `feeds.txt` auch normale Podcast-RSS-Feeds
+(RSS 2.0 mit `<enclosure>`-Audio-Links, z. B. Buzzsprout, Spotify for
+Podcasters, Libsyn) enthalten - Zeile mit `podcast:` präfixen:
+
+```
+podcast:https://rss.buzzsprout.com/2402174.rss | Mein Podcast
+```
+
+oder per CLI:
+
+```bash
+uv run ytdigest feeds add "podcast:https://rss.buzzsprout.com/2402174.rss" --name "Mein Podcast"
+```
+
+- **Kein Caption-Pfad:** Podcasts haben keine YouTube-Untertitel - jede Folge
+  läuft immer über ASR (faster-whisper), das Audio wird dafür einmalig
+  heruntergeladen und danach wieder gelöscht.
+- **Dauer:** wird, falls im Feed vorhanden, aus `<itunes:duration>` gelesen -
+  dafür ist kein zusätzlicher Download nötig. Fehlt das Tag, wird die Folge
+  ungefiltert verarbeitet und die echte Dauer erst beim Transkribieren
+  bekannt.
+- **Identität:** Episoden werden über ihre `<guid>` (Fallback: die
+  Enclosure-URL) erkannt, nicht über den Titel - ein geändertes Postdatum
+  oder eine Titelkorrektur führt also nicht zu einer erneuten Transkription.
+- Läuft über dieselbe Datenbank/Zustandsmaschine wie der YouTube-Pfad -
+  `status`, `retry`, `feeds list` und `run --feed <id>` funktionieren also
+  auch für Podcast-Kanäle.
+
 ## Formatierung einzeiliger Transkripte
 
 ASR (faster-whisper) und manche Caption-Spuren mit sehr langen Cues liefern den

@@ -15,12 +15,13 @@ from pathlib import Path
 
 from ytdigest.config import Config
 from ytdigest.db.repo import Repo, iso_utc
-from ytdigest.feeds.fetcher import fetch_feed, resolve_handle
-from ytdigest.feeds.parser import feed_url_for_channel, parse_feeds_file
+from ytdigest.feeds.fetcher import FeedFetchResult, fetch_feed, resolve_handle
+from ytdigest.feeds.parser import ParsedFeedLine, feed_url_for_channel, parse_feeds_file
+from ytdigest.feeds.podcast_fetcher import fetch_podcast_feed
 from ytdigest.gdrive import DriveUploader, GDriveUnavailable
 from ytdigest.models import Feed, FeedEntry, RunReport, Video
 from ytdigest.naming import slugify
-from ytdigest.sources import asr, captions, local
+from ytdigest.sources import asr, captions, local, podcast
 from ytdigest.storage import write_transcript
 
 log = logging.getLogger(__name__)
@@ -138,19 +139,18 @@ class Pipeline:
 
         for line in parsed:
             try:
-                channel_id, feed_url = self._resolve_source(line, timeout)
+                if line.podcast_url:
+                    channel_id = podcast.channel_id_for(line.podcast_url)
+                    feed_url = line.podcast_url
+                else:
+                    channel_id, feed_url = self._resolve_source(line, timeout)
             except Exception as exc:  # noqa: BLE001
                 log.error("Feed-Zeile nicht auflösbar (%s): %s", line.raw.strip(), exc)
                 report.feeds_failed += 1
                 continue
 
             feed = self.repo.get_feed_by_channel_id(channel_id)
-            fetch = fetch_feed(
-                feed_url, timeout_s=timeout,
-                etag=feed.etag if feed else None,
-                last_modified=feed.last_modified if feed else None,
-                conditional=self.cfg.feeds.use_conditional_get and feed is not None,
-            )
+            fetch = self._fetch_source(line, channel_id, feed_url, feed, timeout)
 
             if feed is None:
                 title = fetch.channel_title
@@ -197,6 +197,18 @@ class Pipeline:
         if deactivated:
             log.info("%d Feed(s) nicht mehr in feeds.txt -> is_active = 0", deactivated)
 
+    def _fetch_source(self, line: ParsedFeedLine, channel_id: str, feed_url: str,
+                      feed: Feed | None, timeout: float) -> FeedFetchResult:
+        etag = feed.etag if feed else None
+        last_modified = feed.last_modified if feed else None
+        conditional = self.cfg.feeds.use_conditional_get and feed is not None
+        if line.podcast_url:
+            return fetch_podcast_feed(feed_url, channel_id=channel_id, timeout_s=timeout,
+                                      etag=etag, last_modified=last_modified,
+                                      conditional=conditional)
+        return fetch_feed(feed_url, timeout_s=timeout, etag=etag,
+                          last_modified=last_modified, conditional=conditional)
+
     def _resolve_source(self, line, timeout: float) -> tuple[str, str]:
         if line.channel_id and line.feed_url:
             return line.channel_id, line.feed_url
@@ -235,22 +247,24 @@ class Pipeline:
 
         if not is_first_run:
             for entry in fresh:
-                self.repo.add_video(entry, feed.id, status="discovered")
+                self.repo.add_video(entry, feed.id, status="discovered",
+                                    duration_s=entry.duration_s)
             return len(fresh)
 
         mode = opts.initial_mode
         if mode == "mark-seen":
             for entry in fresh:
                 self.repo.add_video(entry, feed.id, status="skipped",
-                                    skip_reason="initial_sync")
+                                    skip_reason="initial_sync", duration_s=entry.duration_s)
             return len(fresh)
 
         if mode == "backfill":
             for entry in fresh[:_BACKFILL_MAX]:
-                self.repo.add_video(entry, feed.id, status="discovered")
+                self.repo.add_video(entry, feed.id, status="discovered",
+                                    duration_s=entry.duration_s)
             for entry in fresh[_BACKFILL_MAX:]:
                 self.repo.add_video(entry, feed.id, status="skipped",
-                                    skip_reason="initial_sync")
+                                    skip_reason="initial_sync", duration_s=entry.duration_s)
             return len(fresh)
 
         return self._ingest_latest(feed, fresh, opts)
@@ -266,22 +280,25 @@ class Pipeline:
         for entry in fresh:
             if chosen is not None or probed >= _LATEST_PROBE_MAX:
                 self.repo.add_video(entry, feed.id, status="skipped",
-                                    skip_reason="initial_sync")
+                                    skip_reason="initial_sync", duration_s=entry.duration_s)
                 continue
             probed += 1
-            meta = captions.probe(entry.url)
-            if meta.error:
-                log.warning("latest-Probe %s: %s", entry.video_id, meta.error)
+            duration_s = entry.duration_s
+            if duration_s is None:
+                # nur nötig, wenn die Dauer nicht schon aus dem Feed bekannt ist
+                # (z. B. itunes:duration bei Podcasts) - YouTube braucht yt-dlp dafür.
+                meta = captions.probe(entry.url)
+                if meta.error:
+                    log.warning("latest-Probe %s: %s", entry.video_id, meta.error)
+                    self.repo.add_video(entry, feed.id, status="skipped",
+                                        skip_reason="initial_sync")
+                    continue
+                duration_s = meta.duration_s
+            if duration_s is not None and duration_s < min_seconds:
                 self.repo.add_video(entry, feed.id, status="skipped",
-                                    skip_reason="initial_sync")
+                                    skip_reason="too_short", duration_s=duration_s)
                 continue
-            if meta.duration_s is not None and meta.duration_s < min_seconds:
-                self.repo.add_video(entry, feed.id, status="skipped",
-                                    skip_reason="too_short",
-                                    duration_s=meta.duration_s)
-                continue
-            self.repo.add_video(entry, feed.id, status="discovered",
-                                duration_s=meta.duration_s)
+            self.repo.add_video(entry, feed.id, status="discovered", duration_s=duration_s)
             chosen = entry.video_id
 
         if chosen is None:
@@ -319,8 +336,14 @@ class Pipeline:
         self.repo.mark_processing(video.video_id)
         current = self.repo.get_video(video.video_id) or video
         is_local = local.is_local_feed(feed.feed_url)
+        is_podcast = podcast.is_podcast_feed(feed.channel_id)
 
-        meta = local.probe(Path(video.url)) if is_local else captions.probe(video.url)
+        if is_local:
+            meta = local.probe(Path(video.url))
+        elif is_podcast:
+            meta = podcast.probe(current.duration_s)
+        else:
+            meta = captions.probe(video.url)
         if meta.error:
             self._fail(current, meta.error, report)
             return
@@ -337,7 +360,7 @@ class Pipeline:
             return
 
         result = None
-        if not opts.asr_only and not is_local:
+        if not opts.asr_only and not is_local and not is_podcast:
             result = captions.fetch_captions(
                 meta, self.cfg.transcripts.languages,
                 prefer_manual=self.cfg.transcripts.prefer_manual,
@@ -347,7 +370,7 @@ class Pipeline:
             )
 
         if result is None:
-            result = self._try_asr(current, meta, opts, is_local=is_local)
+            result = self._try_asr(current, meta, opts, is_local=is_local, is_podcast=is_podcast)
 
         if result is None:
             self.repo.set_no_transcript(video.video_id)
@@ -369,7 +392,8 @@ class Pipeline:
         if is_local and opts.delete_source_on_success:
             self._delete_source(current)
 
-    def _try_asr(self, video: Video, meta, opts: RunOptions, *, is_local: bool = False):
+    def _try_asr(self, video: Video, meta, opts: RunOptions, *, is_local: bool = False,
+                is_podcast: bool = False):
         if opts.no_asr or not self.cfg.asr.enabled:
             return None
         max_seconds = self.cfg.asr.max_duration_min * 60
@@ -379,6 +403,11 @@ class Pipeline:
         try:
             if is_local:
                 return asr.transcribe_local(Path(video.url), cfg=self.cfg.asr)
+            if is_podcast:
+                return podcast.transcribe(
+                    video.url, cfg=self.cfg.asr,
+                    temp_dir=self.cfg.paths.temp_dir or None,
+                )
             return asr.transcribe(
                 video.url, cfg=self.cfg.asr,
                 temp_dir=self.cfg.paths.temp_dir or None,

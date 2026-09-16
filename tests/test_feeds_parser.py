@@ -38,6 +38,21 @@ def test_unparseable_line_raises():
         parse_line("not a feed at all")
 
 
+def test_podcast_prefix_parsed():
+    parsed = parse_line("podcast:https://rss.buzzsprout.com/2402174.rss | Mein Podcast")
+    assert parsed.podcast_url == "https://rss.buzzsprout.com/2402174.rss"
+    assert parsed.display_name == "Mein Podcast"
+    assert parsed.channel_id is None
+    assert parsed.handle is None
+
+
+def test_podcast_prefix_case_insensitive_and_needs_url():
+    parsed = parse_line("PODCAST:https://example.com/feed.rss")
+    assert parsed.podcast_url == "https://example.com/feed.rss"
+    with pytest.raises(ValueError):
+        parse_line("podcast:")
+
+
 def test_file_dedupes(tmp_path):
     f = tmp_path / "feeds.txt"
     f.write_text(
