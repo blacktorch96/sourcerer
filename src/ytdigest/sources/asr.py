@@ -97,7 +97,12 @@ def _run_whisper(media_path: Path, cfg: AsrCfg) -> TranscriptResult | None:
     log.info("ASR: %s auf %s (%s)", cfg.model, device, compute_type)
 
     model = WhisperModel(cfg.model, device=device, compute_type=compute_type)
-    segments, info = model.transcribe(str(media_path), beam_size=cfg.beam_size)
+    segments, info = model.transcribe(
+        str(media_path), beam_size=cfg.beam_size,
+        condition_on_previous_text=cfg.condition_on_previous_text,
+        repetition_penalty=cfg.repetition_penalty,
+        no_repeat_ngram_size=cfg.no_repeat_ngram_size,
+    )
     text = _to_paragraphs(segments, pause_s=cfg.paragraph_pause_s)
     if not text:
         return None

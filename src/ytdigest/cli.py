@@ -253,6 +253,33 @@ def feeds_list() -> None:
     conn.close()
 
 
+@feeds_app.command("backfill")
+def feeds_backfill(
+    channel_id: str = typer.Argument(..., help="Kanal-ID (UC...), muss bereits per "
+                                                "'feeds add' bekannt sein"),
+    days: int = typer.Option(365, "--days", help="wie viele Tage zurück"),
+    limit: int | None = typer.Option(None, "--limit", help="max. neu anzulegende Videos"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="nur zählen, nichts anlegen"),
+) -> None:
+    """Ältere Videos eines Kanals jenseits des RSS-Fensters (max. ~15) nachtragen.
+
+    Legt sie als 'discovered' an - ein anschließendes 'ytdigest run' verarbeitet
+    sie über die normale Pipeline (Captions, sonst ASR, samt Dauerfilter).
+    """
+    conn = _open_db()
+    try:
+        report = Pipeline(state.cfg, conn).backfill_channel(
+            channel_id, days=days, limit=limit, dry_run=dry_run,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(EXIT_CONFIG) from exc
+    finally:
+        conn.close()
+    console.print(f"[green]{report.new_videos}[/green] Video(s) neu angelegt "
+                  f"(Laufzeit {report.runtime_s:.1f}s).")
+
+
 @feeds_app.command("add")
 def feeds_add(source: str = typer.Argument(
                   ..., help="URL, Kanal-ID, @handle oder 'podcast:<RSS-URL>'"),

@@ -21,7 +21,7 @@ from ytdigest.feeds.podcast_fetcher import fetch_podcast_feed
 from ytdigest.gdrive import DriveUploader, GDriveUnavailable
 from ytdigest.models import Feed, FeedEntry, RunReport, Video
 from ytdigest.naming import slugify
-from ytdigest.sources import asr, captions, local, podcast
+from ytdigest.sources import asr, captions, channel, local, podcast
 from ytdigest.storage import write_transcript
 
 log = logging.getLogger(__name__)
@@ -93,6 +93,64 @@ class Pipeline:
         if not opts.sync_only and channel_dirs:
             scoped = replace(opts, feed_channel_ids=[d.name for d in channel_dirs])
             self.process(scoped, report)
+
+        report.runtime_s = time.monotonic() - started
+        return report
+
+    # -------------------------------------------------------------- backfill
+    def backfill_channel(self, channel_id: str, *, days: int,
+                         limit: int | None = None, dry_run: bool = False) -> RunReport:
+        """Ältere Videos eines bereits bekannten Kanals jenseits des
+        RSS-Fensters (max. ~15 Einträge, siehe ``feeds/fetcher.py``) nachtragen.
+
+        Geht die komplette Upload-Liste des Kanals (yt-dlp, flach, neueste
+        zuerst) durch, überspringt bereits bekannte Videos und holt für den
+        Rest je einzeln das Upload-Datum per vollem Probe nach - die flache
+        Liste selbst liefert kein Datum. Bricht ab, sobald ein Kandidat älter
+        als ``days`` Tage ist (Kanal-Tab ist chronologisch sortiert)."""
+        report = RunReport()
+        started = time.monotonic()
+
+        feed = self.repo.get_feed_by_channel_id(channel_id)
+        if feed is None:
+            raise ValueError(
+                f"Kein Feed mit Kanal-ID {channel_id} - zuerst 'ytdigest feeds add'"
+            )
+
+        cutoff = _now() - timedelta(days=days)
+        uploads = channel.list_uploads(channel_id)
+        log.info("%d Video(s) insgesamt im Kanal %s gefunden", len(uploads), feed.name)
+
+        for upload in uploads:
+            if limit is not None and report.new_videos >= limit:
+                break
+            video_id = upload["video_id"]
+            if self.repo.video_exists(video_id):
+                continue
+
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            meta = captions.probe(url)
+            if meta.error:
+                log.warning("Backfill-Probe %s: %s", video_id, meta.error)
+                continue
+
+            upload_date = meta.info.get("upload_date")
+            if not upload_date:
+                log.warning("Kein Upload-Datum für %s, überspringe", video_id)
+                continue
+            published_at = datetime.strptime(upload_date, "%Y%m%d").replace(tzinfo=UTC)
+            if published_at < cutoff:
+                log.info("Cutoff erreicht bei %s (%s) - Backfill beendet",
+                        video_id, upload_date)
+                break
+
+            if not dry_run:
+                entry = FeedEntry(video_id=video_id, title=upload["title"] or video_id,
+                                  published_at=published_at, url=url)
+                self.repo.add_video(entry, feed.id, status="discovered",
+                                    duration_s=meta.duration_s)
+            report.new_videos += 1
+            time.sleep(self.cfg.feeds.delay_between_s)
 
         report.runtime_s = time.monotonic() - started
         return report
@@ -319,13 +377,19 @@ class Pipeline:
             return
 
         log.info("%d Video(s) zu verarbeiten", len(videos))
-        for video in videos:
+        for i, video in enumerate(videos):
             feed = self._feed_for(video.feed_id)
             try:
                 self._process_one(video, feed, opts, report)
             except Exception as exc:  # noqa: BLE001 - ein Video darf den Lauf nie beenden
                 log.exception("Unerwarteter Fehler bei %s", video.video_id)
                 self._fail(video, f"unknown: {exc}", report)
+            if not opts.dry_run and i < len(videos) - 1:
+                # Höflichkeitspause: ohne die hämmert die Verarbeitung den
+                # Caption-Endpoint (api/timedtext) Video für Video ohne Pause
+                # an, was YouTube nach einigen Dutzend Requests mit 429
+                # blockiert (Fallback ist dann zwar ASR, aber unnötig teuer).
+                time.sleep(self.cfg.feeds.video_delay_s)
 
     def _process_one(self, video: Video, feed: Feed, opts: RunOptions,
                      report: RunReport) -> None:

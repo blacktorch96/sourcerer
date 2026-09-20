@@ -28,6 +28,8 @@ class Paths(BaseModel):
 class FeedsCfg(BaseModel):
     request_timeout_s: int = 15
     delay_between_s: float = 2.0
+    video_delay_s: float = 1.5   # Pause zwischen verarbeiteten Videos, Schutz vor
+                                 # 429 auf YouTubes Caption-Endpoint (api/timedtext)
     use_conditional_get: bool = True
 
 
@@ -53,6 +55,13 @@ class AsrCfg(BaseModel):
     beam_size: int = 5
     max_duration_min: int = 90
     paragraph_pause_s: float = 1.8   # Sprechpause ab der ein neuer Absatz beginnt, 0 = aus
+    condition_on_previous_text: bool = False  # True kann Wiederholungsschleifen
+                                              # verursachen: gerät faster-whisper einmal
+                                              # ins Stottern, füttert es die entgleiste
+                                              # Ausgabe als Kontext in die nächsten
+                                              # Segmente zurück und wiederholt sie weiter
+    repetition_penalty: float = 1.1  # >1.0 bestraft wiederholte Tokens zusätzlich
+    no_repeat_ngram_size: int = 3    # verbietet dreifach wiederholte Wortfolgen
 
 
 class OutputCfg(BaseModel):

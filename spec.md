@@ -117,6 +117,8 @@ log_file     = "logs/ytdigest.log"
 [feeds]
 request_timeout_s   = 15
 delay_between_s     = 2.0    # Höflichkeitspause zwischen Feed-Abrufen
+video_delay_s       = 1.5    # Pause zwischen verarbeiteten Videos (Schutz vor
+                              # 429 auf YouTubes Caption-Endpoint)
 use_conditional_get = true   # ETag / If-Modified-Since
 
 [transcripts]
@@ -135,6 +137,11 @@ device           = "cuda"         # "cuda" | "cpu" | "auto"
 compute_type     = "float16"
 beam_size        = 5
 max_duration_min = 90             # längere Videos nicht per ASR verarbeiten
+condition_on_previous_text = false  # aus, weil sonst eine einmal entgleiste
+                                     # Ausgabe als Kontext zurückgefüttert wird
+                                     # und sich zu Wiederholungsschleifen aufschaukelt
+repetition_penalty   = 1.1
+no_repeat_ngram_size = 3
 
 [output]
 include_video_id  = false   # true = Video-ID immer an den Dateinamen hängen
