@@ -32,11 +32,14 @@ andocken kann.
 - Fallback auf lokale Spracherkennung (faster-whisper), wenn keine Untertitel existieren
 - Ablage als `.txt` plus `.json`-Sidecar in einer kanalbasierten Verzeichnisstruktur
 - Wiederaufnahme nach Abbruch, Retry fehlgeschlagener Videos
+- Optionale lokale Web-Oberfläche (`ytdigest web serve`, Extra `web`): Feeds
+  verwalten, Transkripte lesen/downloaden, Läufe anstoßen (siehe README) - kein
+  Login, da nur für den lokalen/persönlichen Gebrauch gedacht (siehe 11)
 
 **Out of Scope (diese Version)**
 
 - LLM-Zusammenfassung, Embedding, Suche
-- Web-UI oder API
+- API (die Web-Oberfläche ist ein serverseitig gerendertes UI, keine JSON-API)
 - Mehrbenutzerbetrieb, Authentifizierung
 - Download der Videodateien selbst (Audio wird nur temporär für ASR gezogen)
 - Playlists, Suchergebnisse, Live-Streams als Quelle

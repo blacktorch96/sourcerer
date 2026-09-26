@@ -24,3 +24,4 @@ htmlcov/
 service_account.json
 tests/fixtures/feed_basic.xml
 feeds.txt
+ausfuehren.bat

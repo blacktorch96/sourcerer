@@ -16,8 +16,8 @@ from ytdigest import __version__
 from ytdigest.config import Config, load_config
 from ytdigest.db.repo import Repo
 from ytdigest.db.schema import connect, init_db
-from ytdigest.feeds.parser import parse_line
-from ytdigest.locking import LockHeld, single_instance
+from ytdigest.feeds.parser import append_line, parse_line
+from ytdigest.locking import LockHeld, lock_path_for, single_instance
 from ytdigest.logsetup import setup_logging
 from ytdigest.pipeline import INITIAL_MODES, Pipeline, RunOptions
 
@@ -27,6 +27,8 @@ feeds_app = typer.Typer(help="Feed-Liste verwalten.")
 app.add_typer(feeds_app, name="feeds")
 local_app = typer.Typer(help="Lokale Videodateien scannen und transkribieren.")
 app.add_typer(local_app, name="local")
+web_app = typer.Typer(help="Web-Oberfläche (Feeds verwalten, Transkripte lesen).")
+app.add_typer(web_app, name="web")
 console = Console()
 
 EXIT_OK = 0
@@ -78,7 +80,7 @@ def _open_db(*, create: bool = False) -> sqlite3.Connection:
 
 
 def _lock_path() -> Path:
-    return state.cfg.paths.database.with_suffix(".lock")
+    return lock_path_for(state.cfg.paths.database)
 
 
 # --------------------------------------------------------------------- init
@@ -295,10 +297,7 @@ def feeds_add(source: str = typer.Argument(
     feeds_file = state.cfg.paths.feeds_file
     existing = feeds_file.read_text(encoding="utf-8") if feeds_file.exists() else ""
     if line not in existing.splitlines():
-        with feeds_file.open("a", encoding="utf-8", newline="\n") as fh:
-            if existing and not existing.endswith("\n"):
-                fh.write("\n")
-            fh.write(line + "\n")
+        append_line(feeds_file, line)
         console.print(f"[green]Hinzugefügt:[/green] {line}")
 
     conn = _open_db()
@@ -361,6 +360,30 @@ def local_scan(
 
     _print_report(report)
     raise typer.Exit(report.exit_code)
+
+
+# ----------------------------------------------------------------- web serve
+@web_app.command("serve")
+def web_serve(
+    host: str | None = typer.Option(None, "--host", help="Bind-Adresse (Default aus config.toml)"),
+    port: int | None = typer.Option(None, "--port", help="Port (Default aus config.toml)"),
+    debug: bool = typer.Option(False, "--debug", help="Flask-Debugmodus"),
+) -> None:
+    """Web-Oberfläche starten: Feeds verwalten, Transkripte lesen/downloaden."""
+    try:
+        from ytdigest.web.app import create_app
+    except ImportError as exc:
+        console.print("[red]Flask fehlt.[/red] Installation mit dem Extra 'web': "
+                      "uv sync --extra web")
+        raise typer.Exit(EXIT_CONFIG) from exc
+
+    cfg = state.cfg
+    _open_db(create=True).close()  # sicherstellen, dass DB/Verzeichnisse existieren
+    flask_app = create_app(cfg)
+    # kein Reloader: die App hält Zustand (laufender Job) im Prozessspeicher,
+    # ein zweiter (Reloader-)Prozess würde diesen Zustand duplizieren
+    flask_app.run(host=host or cfg.web.host, port=port or cfg.web.port,
+                  debug=debug or cfg.web.debug, use_reloader=False)
 
 
 if __name__ == "__main__":  # pragma: no cover

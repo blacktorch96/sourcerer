@@ -85,6 +85,14 @@ class GDriveCfg(BaseModel):
     upload_sidecar: bool = True  # zusätzlich zur .txt auch die .json-Metadatei hochladen
 
 
+class WebCfg(BaseModel):
+    host: str = "127.0.0.1"   # bewusst nicht 0.0.0.0: kein Login vorgesehen (spec: nur
+                              # lokaler/persönlicher Gebrauch), LAN-Zugriff explizit per
+                              # --host anfordern
+    port: int = 5000
+    debug: bool = False
+
+
 class Config(BaseModel):
     paths: Paths = Field(default_factory=Paths)
     feeds: FeedsCfg = Field(default_factory=FeedsCfg)
@@ -94,6 +102,7 @@ class Config(BaseModel):
     output: OutputCfg = Field(default_factory=OutputCfg)
     local: LocalCfg = Field(default_factory=LocalCfg)
     gdrive: GDriveCfg = Field(default_factory=GDriveCfg)
+    web: WebCfg = Field(default_factory=WebCfg)
 
     source_path: Path | None = None
 

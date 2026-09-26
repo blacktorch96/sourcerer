@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Transkripte - ytdigest{% endblock %}
+{% block content %}
+  <h1>Transkripte</h1>
+
+  <form class="filter-bar" method="get" action="{{ url_for('transcripts.index') }}">
+    <select name="feed" onchange="this.form.submit()">
+      <option value="">Alle Kanäle</option>
+      {% for feed in feeds %}
+        <option value="{{ feed.id }}" {{ 'selected' if feed.id == selected_feed_id else '' }}>
+          {{ feed.name }}
+        </option>
+      {% endfor %}
+    </select>
+    <input type="text" id="title-filter" placeholder="Titel durchsuchen …">
+  </form>
+
+  <table class="transcripts-table" id="transcripts-table">
+    <thead>
+      <tr><th>Titel</th><th>Veröffentlicht</th><th>Dauer</th><th>Quelle</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for video in videos %}
+        <tr>
+          <td class="title-cell">
+            <a href="{{ url_for('transcripts.detail', video_id=video.video_id) }}">{{ video.title }}</a>
+          </td>
+          <td>{{ video.published_at[:10] }}</td>
+          <td>
+            {% if video.duration_s %}{{ video.duration_s // 60 }}:{{ '%02d' % (video.duration_s % 60) }}{% else %}—{% endif %}
+          </td>
+          <td>{{ video.source or "—" }}</td>
+          <td>
+            <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='txt') }}">.txt</a>
+            <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='json') }}">.json</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not videos %}<p class="muted">Keine fertigen Transkripte für diese Auswahl.</p>{% endif %}
+{% endblock %}

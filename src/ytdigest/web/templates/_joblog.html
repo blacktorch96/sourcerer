@@ -1,0 +1,9 @@
+<section id="job-panel" class="job-panel" data-running="{{ 'true' if jobs.running else 'false' }}"
+         data-label="{{ jobs.label or '' }}">
+  <div class="job-status">
+    <span id="job-status-text">
+      {% if jobs.running %}läuft: {{ jobs.label }}{% else %}kein Job aktiv{% endif %}
+    </span>
+  </div>
+  <pre id="job-log" class="job-log" hidden></pre>
+</section>

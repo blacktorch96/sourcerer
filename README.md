@@ -100,6 +100,32 @@ uv run ytdigest feeds add "podcast:https://rss.buzzsprout.com/2402174.rss" --nam
   `status`, `retry`, `feeds list` und `run --feed <id>` funktionieren also
   auch für Podcast-Kanäle.
 
+## Web-Oberfläche
+
+```bash
+uv sync --extra web       # Flask installieren
+uv run ytdigest web serve                    # http://127.0.0.1:5000
+uv run ytdigest web serve --host 0.0.0.0 --port 8080  # im LAN erreichbar
+```
+
+Rein lokales Werkzeug ohne Login - Bind-Adresse deshalb per Default `127.0.0.1`
+(überschreibbar per `--host`/`--port` oder `[web]` in `config.toml`).
+
+- **Dashboard** (`/`): Zustände wie `ytdigest status`, letzte Fehler, globaler
+  "Sync & Verarbeitung jetzt starten"-Button mit Live-Log.
+- **Feeds** (`/feeds`): Feeds hinzufügen/entfernen (schreibt weiterhin
+  `feeds.txt` - das bleibt die Quelle der Wahrheit), sowie Sync/Backfill/Retry
+  je Kanal.
+- **Transkripte** (`/transcripts`): nach Kanal filtern, im Browser lesen,
+  `.txt`/`.json` herunterladen.
+
+Ausgelöste Läufe (Sync, Backfill) laufen im selben Prozess in einem
+Hintergrund-Thread und nutzen denselben Single-Instance-Lock wie die CLI -
+ein Web-Trigger kollidiert also nicht mit einem parallel laufenden
+Cron-Aufruf, sondern bekommt stattdessen eine "Lock gehalten"-Meldung im
+Live-Log. Es läuft immer nur ein Job gleichzeitig, unabhängig davon, wie
+viele Browser-Tabs offen sind.
+
 ## Formatierung einzeiliger Transkripte
 
 ASR (faster-whisper) und manche Caption-Spuren mit sehr langen Cues liefern den
@@ -142,5 +168,10 @@ beim Ablegen des Transkripts.
 yt-dlp regelmäßig aktualisieren, sonst bricht der Abruf still:
 
 ```bash
-uv lock --upgrade-package yt-dlp && uv sync
+uv lock --upgrade-package yt-dlp && uv sync --extra asr
 ```
+
+`--extra asr` beim `uv sync` nicht vergessen (bzw. an die eigene Installation
+anpassen, siehe [Installation](#installation)) - ein bloßes `uv sync` synct
+nur auf die explizit angegebenen Extras und deinstalliert sonst
+`faster-whisper` wieder, auch wenn es vorher installiert war.

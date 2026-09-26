@@ -16,6 +16,12 @@ class LockHeld(RuntimeError):
     """Ein anderer Lauf hält bereits das Lock."""
 
 
+def lock_path_for(database: Path) -> Path:
+    """Lockfile-Pfad aus dem Datenbankpfad ableiten - von CLI und Web-UI
+    gleichermaßen genutzt, damit sich beide Zugänge gegenseitig blockieren."""
+    return database.with_suffix(".lock")
+
+
 def _read_lock(path: Path) -> dict | None:
     try:
         return json.loads(path.read_text(encoding="utf-8"))

@@ -67,6 +67,49 @@ def parse_line(raw: str) -> ParsedFeedLine | None:
     raise ValueError(f"Unverständliche feeds.txt-Zeile: {raw!r}")
 
 
+def append_line(path: Path, line: str) -> None:
+    """Zeile an feeds.txt anhängen (spiegelt ``cli.feeds_add``, für die Web-UI)."""
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    with path.open("a", encoding="utf-8", newline="\n") as fh:
+        if existing and not existing.endswith("\n"):
+            fh.write("\n")
+        fh.write(line + "\n")
+
+
+def _line_matches_feed(parsed: ParsedFeedLine, feed) -> bool:
+    """``feed.resolved_from`` ist der einmal aufgelöste Ursprungstoken (z. B.
+    '@handle') - nur darüber lässt sich eine Handle-Zeile eindeutig einem
+    bereits bekannten Feed zuordnen, da die Zeile selbst keine Kanal-ID trägt."""
+    if feed.resolved_from:
+        return parsed.handle == feed.resolved_from
+    if parsed.podcast_url:
+        return parsed.podcast_url == feed.feed_url
+    return parsed.channel_id == feed.channel_id or parsed.feed_url == feed.feed_url
+
+
+def remove_line(path: Path, feed) -> bool:
+    """Die feeds.txt-Zeile entfernen, die zu ``feed`` aufgelöst wurde (siehe
+    ``_line_matches_feed``). Andere Zeilen (inkl. Kommentare/Leerzeilen)
+    bleiben unverändert. Gibt True zurück, wenn eine Zeile entfernt wurde."""
+    if not path.is_file():
+        return False
+    lines = path.read_text(encoding="utf-8").splitlines()
+    kept: list[str] = []
+    removed = False
+    for raw in lines:
+        try:
+            parsed = parse_line(raw)
+        except ValueError:
+            parsed = None
+        if not removed and parsed is not None and _line_matches_feed(parsed, feed):
+            removed = True
+            continue
+        kept.append(raw)
+    if removed:
+        path.write_text(("\n".join(kept) + "\n") if kept else "", encoding="utf-8", newline="\n")
+    return removed
+
+
 def parse_feeds_file(path: Path) -> list[ParsedFeedLine]:
     if not path.is_file():
         return []

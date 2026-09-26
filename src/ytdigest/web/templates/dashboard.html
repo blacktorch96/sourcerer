@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - ytdigest{% endblock %}
+{% block content %}
+  <h1>Dashboard</h1>
+
+  <table class="status-table">
+    <thead><tr><th>Zustand</th><th>Anzahl</th></tr></thead>
+    <tbody>
+      {% for name, count in rows %}
+        <tr><td>{{ name }}</td><td>{{ count }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form class="job-form" method="post" action="{{ url_for('jobs.run_all') }}">
+    <button type="submit" {{ 'disabled' if jobs.running else '' }}>Sync &amp; Verarbeitung jetzt starten</button>
+  </form>
+
+  {% include "_joblog.html" %}
+
+  <h2>Letzte Fehler</h2>
+  {% if errors %}
+    <table class="error-table">
+      <thead><tr><th>Video</th><th>Titel</th><th>Fehler</th></tr></thead>
+      <tbody>
+        {% for video in errors %}
+          <tr>
+            <td><code>{{ video.video_id }}</code></td>
+            <td>{{ video.title }}</td>
+            <td>{{ video.last_error }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Keine Fehler.</p>
+  {% endif %}
+{% endblock %}

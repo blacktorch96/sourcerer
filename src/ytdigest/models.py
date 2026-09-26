@@ -26,6 +26,7 @@ class Feed:
     dir_slug: str
     channel_title: str | None = None
     display_name: str | None = None
+    resolved_from: str | None = None    # Ursprungstoken (z. B. '@handle'), siehe feeds.txt
     etag: str | None = None
     last_modified: str | None = None
     last_checked_at: str | None = None

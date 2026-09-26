@@ -28,6 +28,7 @@ def _feed_from_row(row: sqlite3.Row) -> Feed:
         dir_slug=row["dir_slug"],
         channel_title=row["channel_title"],
         display_name=row["display_name"],
+        resolved_from=row["resolved_from"],
         etag=row["etag"],
         last_modified=row["last_modified"],
         last_checked_at=row["last_checked_at"],
@@ -173,6 +174,24 @@ class Repo:
             "UPDATE videos SET status = 'discovered' WHERE status = 'processing'"
         )
         return cur.rowcount
+
+    def list_videos(self, *, feed_id: int | None = None,
+                    statuses: tuple[str, ...] | None = None) -> list[Video]:
+        """Videos für die Web-Oberfläche (Transkript-Browser, Feed-Detail) -
+        neueste zuerst, optional nach Feed und/oder Status gefiltert."""
+        where: list[str] = []
+        params: list = []
+        if feed_id is not None:
+            where.append("feed_id = ?")
+            params.append(feed_id)
+        if statuses:
+            where.append(f"status IN ({','.join('?' * len(statuses))})")
+            params.extend(statuses)
+        sql = "SELECT * FROM videos"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY published_at DESC"
+        return [_video_from_row(r) for r in self.conn.execute(sql, params)]
 
     def claim_videos(self, *, max_attempts: int, limit: int | None = None,
                      feed_ids: list[int] | None = None,

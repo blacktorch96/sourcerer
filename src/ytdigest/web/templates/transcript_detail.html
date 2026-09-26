@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ video.title }} - ytdigest{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('transcripts.index', feed=feed.id if feed else None) }}">&larr; zurück</a></p>
+  <h1>{{ video.title }}</h1>
+  <p class="meta">
+    {{ feed.name if feed else "—" }} · {{ video.published_at[:10] }}
+    {% if video.duration_s %} · {{ video.duration_s // 60 }}:{{ '%02d' % (video.duration_s % 60) }}{% endif %}
+    {% if video.source %} · {{ video.source }}{% endif %}
+    · <a href="{{ video.url }}" target="_blank" rel="noopener">YouTube</a>
+  </p>
+  <p class="downloads">
+    <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='txt') }}">Download .txt</a>
+    <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='json') }}">Download .json</a>
+  </p>
+
+  <pre class="transcript-text">{{ text }}</pre>
+{% endblock %}
