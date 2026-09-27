@@ -14,5 +14,9 @@
     <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='json') }}">Download .json</a>
   </p>
 
-  <pre class="transcript-text">{{ text }}</pre>
+  <div class="transcript-text">
+    {% for paragraph in paragraphs %}
+      <p>{{ paragraph }}</p>
+    {% endfor %}
+  </div>
 {% endblock %}

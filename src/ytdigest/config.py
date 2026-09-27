@@ -89,7 +89,7 @@ class WebCfg(BaseModel):
     host: str = "127.0.0.1"   # bewusst nicht 0.0.0.0: kein Login vorgesehen (spec: nur
                               # lokaler/persönlicher Gebrauch), LAN-Zugriff explizit per
                               # --host anfordern
-    port: int = 5000
+    port: int = 5050
     debug: bool = False
 
 

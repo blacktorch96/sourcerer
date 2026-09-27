@@ -10,10 +10,13 @@ from datetime import UTC, datetime
 import pytest
 
 from ytdigest.db.repo import Repo
+from ytdigest.feeds.fetcher import FeedFetchResult
 from ytdigest.locking import LockHeld
 from ytdigest.models import FeedEntry, RunReport
+from ytdigest.web import transcripts_views
 from ytdigest.web.app import create_app
 from ytdigest.web.jobs import JobRunner
+from ytdigest.web.transcripts_views import _dewrap_paragraphs
 
 # --------------------------------------------------------------- JobRunner
 
@@ -179,6 +182,65 @@ def test_feeds_retry_requeues_videos(client, cfg, conn):
     assert Repo(conn).get_video("vid001").status == "discovered"
 
 
+def test_dewrap_paragraphs_joins_hard_wraps_keeps_paragraph_breaks():
+    # wie reflow.wrap_transcript es ablegt: pro Absatz hart auf eine Breite
+    # umgebrochen, Absätze durch eine Leerzeile getrennt
+    text = "Das ist die erste Zeile\ndes ersten Absatzes.\n\nUnd das hier ist\nder zweite Absatz."
+    assert _dewrap_paragraphs(text) == [
+        "Das ist die erste Zeile des ersten Absatzes.",
+        "Und das hier ist der zweite Absatz.",
+    ]
+
+
+def test_dewrap_paragraphs_splits_giant_block_without_pauses():
+    # captions_auto liefert manchmal gar keine Leerzeile (keine erkennbare
+    # Sprechpause über die ganze Folge) - dann soll die Vorschau trotzdem in
+    # lesbaren Häppchen statt einem einzigen Riesenblock erscheinen
+    sentence = "Das ist ein Satz mit ungefähr fünfzig Zeichen Länge hier."
+    text = " ".join([sentence] * 20)  # deutlich über der 500-Zeichen-Schwelle
+    paragraphs = _dewrap_paragraphs(text)
+    assert len(paragraphs) > 1
+    assert all(p.strip().endswith(".") for p in paragraphs)
+    assert " ".join(paragraphs) == text
+
+
+def test_transcripts_detail_dewraps_hard_line_breaks(client, cfg, conn):
+    _seed_feed_with_done_video(cfg, conn)
+    path = cfg.paths.output_dir / "Test" / "2026-01-01_000000_Erstes_Video.txt"
+    path.write_text("Zeile eins\nZeile zwei.\n\nZweiter Absatz.\n", encoding="utf-8")
+
+    resp = client.get("/transcripts/vid001")
+    assert resp.status_code == 200
+    assert b"<p>Zeile eins Zeile zwei.</p>" in resp.data
+    assert b"<p>Zweiter Absatz.</p>" in resp.data
+
+
+def test_transcripts_detail_and_download_support_slash_in_video_id(client, cfg, conn):
+    # lokale Videos (README: 'local scan') haben video_id = '<kanal>/<datei>' -
+    # die Route muss den Schrägstrich im Pfadsegment durchlassen (path-Converter)
+    repo = Repo(conn)
+    feed = repo.create_feed(channel_id="lokal-kanal", feed_url="file:///lokal-kanal",
+                            dir_slug="Lokal", channel_title="Lokal", display_name=None)
+    entry = FeedEntry("Lokal/video.mp4", "Lokales Video", datetime(2026, 1, 1, tzinfo=UTC),
+                      "/videos/Lokal/video.mp4")
+    repo.add_video(entry, feed.id, status="discovered")
+    conn.execute(
+        "UPDATE videos SET status='done', transcript_path=? WHERE video_id='Lokal/video.mp4'",
+        ("Lokal/video.txt",),
+    )
+    target_dir = cfg.paths.output_dir / "Lokal"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "video.txt").write_text("Lokaler Inhalt.\n", encoding="utf-8")
+
+    detail = client.get("/transcripts/Lokal/video.mp4")
+    assert detail.status_code == 200
+    assert b"Lokaler Inhalt." in detail.data
+
+    download = client.get("/transcripts/Lokal/video.mp4/download/txt")
+    assert download.status_code == 200
+    assert b"Lokaler Inhalt." in download.data
+
+
 def test_transcripts_list_and_detail_and_download(client, cfg, conn):
     _seed_feed_with_done_video(cfg, conn)
 
@@ -207,6 +269,93 @@ def test_transcripts_download_rejects_path_traversal(client, cfg, conn):
     (cfg.paths.output_dir.parent / "outside.txt").write_text("geheim", encoding="utf-8")
 
     resp = client.get("/transcripts/vid001/download/txt")
+    assert resp.status_code == 404
+
+
+def test_transcripts_shows_pending_video_with_action_button(client, cfg, conn, monkeypatch):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    entry = FeedEntry("vid002", "Zweites Video, noch offen", datetime(2026, 1, 2, tzinfo=UTC),
+                      "https://youtube.com/watch?v=vid002")
+    Repo(conn).add_video(entry, feed.id, status="discovered")
+    monkeypatch.setattr(transcripts_views, "fetch_feed",
+                        lambda *a, **k: FeedFetchResult(entries=[]))
+
+    resp = client.get(f"/transcripts?feed={feed.id}")
+    assert resp.status_code == 200
+    assert b"Zweites Video, noch offen" in resp.data
+    assert b"noch nicht verf\xc3\xbcgbar" in resp.data
+    assert b"/transcripts/vid002/process" in resp.data
+
+
+def test_transcripts_marks_too_short_skips_without_action_button(client, cfg, conn, monkeypatch):
+    # Dauer steht beim RSS-Sync noch nicht fest, daher taucht das Video zuerst
+    # wie jedes andere 'noch nicht verfügbare' auf und erst nach einem
+    # Verarbeitungsversuch als 'übersprungen (zu kurz)' - es soll dabei nicht
+    # kommentarlos aus der Liste verschwinden (sähe wie ein stiller Fehler aus).
+    feed = _seed_feed_with_done_video(cfg, conn)
+    repo = Repo(conn)
+    repo.add_video(
+        FeedEntry("short001", "Nur ein Short", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=short001"),
+        feed.id, status="skipped", skip_reason="too_short", duration_s=45,
+    )
+    monkeypatch.setattr(transcripts_views, "fetch_feed",
+                        lambda *a, **k: FeedFetchResult(entries=[]))
+
+    resp = client.get(f"/transcripts?feed={feed.id}")
+    assert resp.status_code == 200
+    assert b"Nur ein Short" in resp.data
+    assert "übersprungen (zu kurz)".encode() in resp.data
+    assert b"/transcripts/short001/process" not in resp.data
+
+
+def test_transcripts_quick_sync_adds_new_entries_from_live_feed(client, cfg, conn, monkeypatch):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    new_entry = FeedEntry("brandneu", "Brandneue Folge", datetime(2026, 2, 1, tzinfo=UTC),
+                         "https://youtube.com/watch?v=brandneu")
+    monkeypatch.setattr(transcripts_views, "fetch_feed",
+                        lambda *a, **k: FeedFetchResult(entries=[new_entry]))
+
+    resp = client.get(f"/transcripts?feed={feed.id}")
+    assert resp.status_code == 200
+    assert b"Brandneue Folge" in resp.data
+    video = Repo(conn).get_video("brandneu")
+    assert video is not None
+    assert video.status == "discovered"
+
+
+def test_transcripts_quick_sync_error_keeps_page_usable(client, cfg, conn, monkeypatch):
+    _seed_feed_with_done_video(cfg, conn)
+    feed = Repo(conn).get_feed_by_channel_id("UCtest")
+    monkeypatch.setattr(transcripts_views, "fetch_feed",
+                        lambda *a, **k: FeedFetchResult(error="rate_limited (429)"))
+
+    resp = client.get(f"/transcripts?feed={feed.id}")
+    assert resp.status_code == 200
+    assert b"rate_limited" in resp.data
+    assert b"Erstes Video" in resp.data
+
+
+def test_transcripts_process_starts_job(app, client, cfg, conn):
+    _seed_feed_with_done_video(cfg, conn)
+    Repo(conn).add_video(
+        FeedEntry("vid002", "Zweites Video", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid002"),
+        Repo(conn).get_feed_by_channel_id("UCtest").id, status="discovered",
+    )
+    started = {}
+    app.extensions["ytdigest_jobs"].start = (
+        lambda label, func: started.setdefault("label", label) or True
+    )
+
+    resp = client.post("/transcripts/vid002/process")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"ok": True}
+    assert "Zweites Video" in started["label"]
+
+
+def test_transcripts_process_unknown_video_404(client):
+    resp = client.post("/transcripts/does-not-exist/process")
     assert resp.status_code == 404
 
 

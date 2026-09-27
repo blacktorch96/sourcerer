@@ -104,7 +104,7 @@ uv run ytdigest feeds add "podcast:https://rss.buzzsprout.com/2402174.rss" --nam
 
 ```bash
 uv sync --extra web       # Flask installieren
-uv run ytdigest web serve                    # http://127.0.0.1:5000
+uv run ytdigest web serve                    # http://127.0.0.1:5050
 uv run ytdigest web serve --host 0.0.0.0 --port 8080  # im LAN erreichbar
 ```
 

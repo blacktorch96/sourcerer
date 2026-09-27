@@ -391,6 +391,27 @@ class Pipeline:
                 # blockiert (Fallback ist dann zwar ASR, aber unnötig teuer).
                 time.sleep(self.cfg.feeds.video_delay_s)
 
+    def process_one(self, video_id: str, opts: RunOptions | None = None) -> RunReport:
+        """Genau ein Video verarbeiten, unabhängig von seinem aktuellen Status
+        (auch 'skipped'/'failed'/'no_transcript') - für die Web-Oberfläche:
+        dort lässt sich damit ein einzelnes, noch nicht transkribiertes Video
+        gezielt anstoßen, ohne den ganzen Feed über claim_videos neu laufen
+        zu lassen."""
+        report = RunReport()
+        started = time.monotonic()
+        video = self.repo.get_video(video_id)
+        if video is None:
+            raise ValueError(f"Unbekanntes Video: {video_id}")
+        if video.status != "done":
+            feed = self._feed_for(video.feed_id)
+            try:
+                self._process_one(video, feed, opts or RunOptions(), report)
+            except Exception as exc:  # noqa: BLE001 - siehe process()
+                log.exception("Unerwarteter Fehler bei %s", video.video_id)
+                self._fail(video, f"unknown: {exc}", report)
+        report.runtime_s = time.monotonic() - started
+        return report
+
     def _process_one(self, video: Video, feed: Feed, opts: RunOptions,
                      report: RunReport) -> None:
         if opts.dry_run:

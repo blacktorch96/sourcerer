@@ -90,8 +90,20 @@
     watchStream();
   }
 
+  function bindToTop() {
+    var btn = qs("#to-top");
+    if (!btn) return;
+    var toggle = function () { btn.hidden = window.scrollY < 400; };
+    window.addEventListener("scroll", toggle, { passive: true });
+    toggle();
+    btn.addEventListener("click", function () {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     bindJobForms();
+    bindToTop();
     bindTitleFilter();
     reconnectIfRunning();
   });

@@ -109,15 +109,48 @@ button.danger { color: var(--danger); }
 .filter-bar { margin-bottom: 12px; }
 .filter-bar input[type=text] { min-width: 240px; }
 
+.pending-row { color: var(--muted); }
+.pending-row td { border-bottom-color: var(--border); }
+.pending-tag {
+  font-size: 0.8em;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--panel-bg);
+}
+
 .transcript-text {
-  white-space: pre-wrap;
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  font-size: 0.95em;
-  line-height: 1.6;
+  font-size: 1em;
+  line-height: 1.7;
   background: var(--panel-bg);
   padding: 16px;
   border-radius: 6px;
 }
 
+.transcript-text p {
+  margin: 0 0 1em;
+}
+
+.transcript-text p:last-child {
+  margin-bottom: 0;
+}
+
 .meta { color: var(--muted); }
 .downloads { margin-bottom: 16px; }
+
+.to-top {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.2em;
+  line-height: 1;
+  background: var(--panel-bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  z-index: 10;
+}
+
+.to-top[hidden] { display: none; }

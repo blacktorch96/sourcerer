@@ -15,15 +15,29 @@
     <input type="text" id="title-filter" placeholder="Titel durchsuchen …">
   </form>
 
+  {% if sync_error %}
+    <p class="muted">Live-Abgleich mit dem Feed fehlgeschlagen ({{ sync_error }}) - zeige den
+      zuletzt bekannten Stand.</p>
+  {% endif %}
+
+  {% if selected_feed_id %}{% include "_joblog.html" %}{% endif %}
+
   <table class="transcripts-table" id="transcripts-table">
     <thead>
       <tr><th>Titel</th><th>Veröffentlicht</th><th>Dauer</th><th>Quelle</th><th></th></tr>
     </thead>
     <tbody>
-      {% for video in videos %}
-        <tr>
+      {% for video, is_done in rows %}
+        {% set too_short = video.status == 'skipped' and video.skip_reason == 'too_short' %}
+        <tr class="{{ 'pending-row' if not is_done else '' }}">
           <td class="title-cell">
-            <a href="{{ url_for('transcripts.detail', video_id=video.video_id) }}">{{ video.title }}</a>
+            {% if is_done %}
+              <a href="{{ url_for('transcripts.detail', video_id=video.video_id) }}">{{ video.title }}</a>
+            {% elif too_short %}
+              {{ video.title }} <span class="pending-tag">übersprungen (zu kurz)</span>
+            {% else %}
+              {{ video.title }} <span class="pending-tag">noch nicht verfügbar</span>
+            {% endif %}
           </td>
           <td>{{ video.published_at[:10] }}</td>
           <td>
@@ -31,12 +45,18 @@
           </td>
           <td>{{ video.source or "—" }}</td>
           <td>
-            <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='txt') }}">.txt</a>
-            <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='json') }}">.json</a>
+            {% if is_done %}
+              <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='txt') }}">.txt</a>
+              <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='json') }}">.json</a>
+            {% elif not too_short %}
+              <form class="job-form" method="post" action="{{ url_for('transcripts.process', video_id=video.video_id) }}">
+                <button type="submit" {{ 'disabled' if jobs.running else '' }}>Herunterladen &amp; transkribieren</button>
+              </form>
+            {% endif %}
           </td>
         </tr>
       {% endfor %}
     </tbody>
   </table>
-  {% if not videos %}<p class="muted">Keine fertigen Transkripte für diese Auswahl.</p>{% endif %}
+  {% if not rows %}<p class="muted">Keine Videos für diese Auswahl.</p>{% endif %}
 {% endblock %}

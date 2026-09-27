@@ -96,3 +96,28 @@ def test_processing_reset_between_runs(cfg, conn, patched):
     conn.execute("UPDATE videos SET status='processing' WHERE video_id='newvideo0001'")
     Pipeline(cfg, conn).run(RunOptions(sync_only=True))
     assert Repo(conn).get_video("newvideo0001").status == "discovered"
+
+
+def test_process_one_ignores_current_status(cfg, conn, patched):
+    cfg.paths.feeds_file.write_text("UCbRP3c757lWg9M-U7TyEkXA\n", encoding="utf-8")
+    Pipeline(cfg, conn).run(RunOptions(initial_mode="mark-seen", sync_only=True))
+    repo = Repo(conn)
+    assert repo.get_video("newvideo0001").status == "skipped"
+
+    report = Pipeline(cfg, conn).process_one("newvideo0001")
+
+    assert repo.get_video("newvideo0001").status == "done"
+    assert report.processed == 1
+
+
+def test_process_one_is_noop_when_already_done(cfg, conn, patched):
+    cfg.paths.feeds_file.write_text("UCbRP3c757lWg9M-U7TyEkXA\n", encoding="utf-8")
+    Pipeline(cfg, conn).run(RunOptions(initial_mode="latest"))
+    report = Pipeline(cfg, conn).process_one("newvideo0001")
+    assert report.processed == 0
+
+
+def test_process_one_unknown_video_raises(cfg, conn, patched):
+    cfg.paths.feeds_file.write_text("UCbRP3c757lWg9M-U7TyEkXA\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        Pipeline(cfg, conn).process_one("does-not-exist")

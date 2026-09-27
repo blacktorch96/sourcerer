@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}ytdigest{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -29,6 +30,8 @@
 
     {% block content %}{% endblock %}
   </main>
+
+  <button id="to-top" class="to-top" type="button" aria-label="Nach oben" hidden>&uarr;</button>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
