@@ -12,6 +12,7 @@ from ytdigest.db.schema import connect
 from ytdigest.feeds.fetcher import fetch_feed
 from ytdigest.feeds.podcast_fetcher import fetch_podcast_feed
 from ytdigest.models import Feed
+from ytdigest.pipeline import RunOptions
 from ytdigest.sources import local, podcast
 from ytdigest.web.context import get_cfg, get_jobs
 
@@ -194,8 +195,11 @@ def download(video_id: str, ext: str):
 
 @bp.post("/<path:video_id>/process")
 def process(video_id: str):
-    """Ein einzelnes, noch nicht fertiges Video gezielt herunterladen und
-    transkribieren (Button bei den 'noch nicht verfügbaren' Videos)."""
+    """Ein einzelnes Video gezielt herunterladen und transkribieren (Button
+    bei den noch offenen Videos in der Status-Spalte). min_duration_min=0
+    hebt den Dauerfilter für diesen einen, bewusst angeklickten Fall auf -
+    so lässt sich auch ein zuvor als 'zu kurz' übersprungenes Video auf
+    Wunsch trotzdem transkribieren."""
     conn = connect(get_cfg().paths.database)
     try:
         video = Repo(conn).get_video(video_id)
@@ -206,7 +210,7 @@ def process(video_id: str):
 
     jobs = get_jobs()
     started = jobs.start(f"Verarbeite: {video.title}",
-                         lambda p: p.process_one(video_id))
+                         lambda p: p.process_one(video_id, RunOptions(min_duration_min=0)))
     if not started:
         return jsonify(ok=False, error=f"Läuft schon: {jobs.label}"), 409
     return jsonify(ok=True)

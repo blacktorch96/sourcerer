@@ -23,13 +23,18 @@
 </form>
 {% endmacro %}
 
-{% macro too_short_icon() %}
-<span class="status-icon tone-warning" title="übersprungen (zu kurz)" aria-label="übersprungen (zu kurz)">
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
-       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M12 3 22 20 2 20Z"/>
-    <line x1="12" y1="9" x2="12" y2="14"/>
-    <line x1="12" y1="17" x2="12" y2="17.01"/>
-  </svg>
-</span>
+{% macro too_short_icon(video_id, disabled) %}
+<form class="job-form status-icon-form" method="post"
+      action="{{ url_for('transcripts.process', video_id=video_id) }}">
+  <button type="submit" class="status-icon tone-warning" {{ 'disabled' if disabled else '' }}
+          title="Übersprungen (zu kurz) - trotzdem herunterladen &amp; transkribieren"
+          aria-label="Trotzdem herunterladen und transkribieren">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 3 22 20 2 20Z"/>
+      <line x1="12" y1="9" x2="12" y2="14"/>
+      <line x1="12" y1="17" x2="12" y2="17.01"/>
+    </svg>
+  </button>
+</form>
 {% endmacro %}

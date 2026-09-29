@@ -313,11 +313,13 @@ def test_transcripts_shows_pending_video_with_action_button(client, cfg, conn, m
     assert b"/transcripts/vid002/process" in resp.data
 
 
-def test_transcripts_marks_too_short_skips_without_action_button(client, cfg, conn, monkeypatch):
+def test_transcripts_marks_too_short_skips_with_force_button(client, cfg, conn, monkeypatch):
     # Dauer steht beim RSS-Sync noch nicht fest, daher taucht das Video zuerst
     # wie jedes andere 'noch nicht verfügbare' auf und erst nach einem
     # Verarbeitungsversuch als 'übersprungen (zu kurz)' - es soll dabei nicht
     # kommentarlos aus der Liste verschwinden (sähe wie ein stiller Fehler aus).
+    # Der Button bleibt erhalten, damit sich ein zu kurzes Video trotzdem
+    # gezielt erzwingen lässt.
     feed = _seed_feed_with_done_video(cfg, conn)
     repo = Repo(conn)
     repo.add_video(
@@ -331,8 +333,38 @@ def test_transcripts_marks_too_short_skips_without_action_button(client, cfg, co
     resp = client.get(f"/transcripts?feed={feed.id}")
     assert resp.status_code == 200
     assert b"Nur ein Short" in resp.data
-    assert "übersprungen (zu kurz)".encode() in resp.data
-    assert b"/transcripts/short001/process" not in resp.data
+    assert b"/transcripts/short001/process" in resp.data
+
+
+def test_transcripts_process_ignores_duration_filter(app, client, cfg, conn):
+    # Ein Klick auf das 'zu kurz'-Icon soll das Video trotz Dauerfilter
+    # transkribieren - process_one() bekommt dafür min_duration_min=0 mit.
+    feed = _seed_feed_with_done_video(cfg, conn)
+    Repo(conn).add_video(
+        FeedEntry("short001", "Nur ein Short", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=short001"),
+        feed.id, status="skipped", skip_reason="too_short", duration_s=45,
+    )
+    captured = {}
+
+    def fake_start(label, func):
+        captured["func"] = func
+        return True
+
+    app.extensions["ytdigest_jobs"].start = fake_start
+    resp = client.post("/transcripts/short001/process")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"ok": True}
+
+    class _FakePipeline:
+        def process_one(self, video_id, opts):
+            captured["video_id"] = video_id
+            captured["opts"] = opts
+            return RunReport()
+
+    captured["func"](_FakePipeline())
+    assert captured["video_id"] == "short001"
+    assert captured["opts"].min_duration_min == 0
 
 
 def test_transcripts_quick_sync_adds_new_entries_from_live_feed(client, cfg, conn, monkeypatch):

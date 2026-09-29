@@ -43,7 +43,7 @@
             </td>
             <td>
               {% if is_done %}{{ icons.done_icon() }}
-              {% elif too_short %}{{ icons.too_short_icon() }}
+              {% elif too_short %}{{ icons.too_short_icon(video.video_id, jobs.running) }}
               {% else %}{{ icons.pending_icon(video.video_id, jobs.running) }}
               {% endif %}
             </td>
