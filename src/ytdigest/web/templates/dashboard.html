@@ -18,6 +18,19 @@
 
   {% include "_joblog.html" %}
 
+  <h2>Letzter Sync</h2>
+  {% if jobs.last_report is none %}
+    <p class="muted">Noch kein Lauf seit dem Start der Web-Oberfläche.</p>
+  {% elif jobs.last_report.processed_titles %}
+    <ul class="processed-list">
+      {% for title in jobs.last_report.processed_titles %}
+        <li>{{ title }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">Keine neuen Transkripte beim letzten Sync.</p>
+  {% endif %}
+
   <h2>Letzte Fehler</h2>
   {% if errors %}
     <table class="error-table">

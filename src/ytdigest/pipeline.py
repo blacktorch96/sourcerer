@@ -468,6 +468,7 @@ class Pipeline:
                               transcript_path=tpath, metadata_path=mpath)
         self._upload_to_drive(feed, tpath, mpath)
         report.processed += 1
+        report.processed_titles.append(video.title)
         if result.source == "asr":
             report.via_asr += 1
         else:

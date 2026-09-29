@@ -27,7 +27,7 @@ def test_jobrunner_broadcasts_logs_and_done(cfg, conn):
 
     def fake_job(pipeline):
         logging.getLogger("ytdigest").info("Zwischenschritt")
-        return RunReport(processed=3, via_asr=1)
+        return RunReport(processed=3, via_asr=1, processed_titles=["Folge A", "Folge B"])
 
     assert runner.start("Testjob", fake_job)
 
@@ -40,8 +40,10 @@ def test_jobrunner_broadcasts_logs_and_done(cfg, conn):
 
     assert any(i["type"] == "log" and "Zwischenschritt" in i["text"] for i in items)
     assert items[-1]["report"]["processed"] == 3
+    assert items[-1]["report"]["processed_titles"] == ["Folge A", "Folge B"]
     assert items[-1]["error"] is None
     assert not runner.running
+    assert runner.last_report.processed_titles == ["Folge A", "Folge B"]
 
 
 def test_jobrunner_rejects_concurrent_start(cfg, conn):
@@ -128,6 +130,29 @@ def test_dashboard_shows_status_counts(client, cfg, conn):
     assert resp.status_code == 200
     assert b"Dashboard" in resp.data
     assert b"done" in resp.data
+
+
+def test_dashboard_shows_no_run_yet_before_any_job(client):
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Noch kein Lauf" in resp.data
+
+
+def test_dashboard_shows_processed_titles_after_sync(app, client):
+    app.extensions["ytdigest_jobs"].last_report = RunReport(
+        processed=2, processed_titles=["Folge 1", "Folge 2"],
+    )
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Folge 1" in resp.data
+    assert b"Folge 2" in resp.data
+
+
+def test_dashboard_shows_nothing_new_when_sync_found_nothing(app, client):
+    app.extensions["ytdigest_jobs"].last_report = RunReport(processed=0)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Keine neuen Transkripte" in resp.data
 
 
 def test_feeds_page_lists_feed(client, cfg, conn):

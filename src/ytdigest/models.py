@@ -113,6 +113,8 @@ class RunReport:
     skipped: int = 0
     failed: int = 0
     runtime_s: float = 0.0
+    processed_titles: list[str] = field(default_factory=list)  # für die Web-Oberfläche:
+                                                                # "im letzten Sync transkribiert"
 
     @property
     def exit_code(self) -> int:

@@ -118,6 +118,7 @@ class JobRunner:
                 "skipped": self.last_report.skipped,
                 "failed": self.last_report.failed,
                 "runtime_s": round(self.last_report.runtime_s, 1),
+                "processed_titles": self.last_report.processed_titles,
             }
         for sink in list(self._sinks):
             sink.put(payload)

@@ -49,6 +49,7 @@ def test_initial_mode_latest_picks_first_long_video(cfg, conn, patched):
     assert repo.get_video("oldvideo0002").status == "skipped"
     assert report.processed == 1
     assert report.via_captions == 1
+    assert report.processed_titles == ["Neues langes Video"]
 
     txt = cfg.paths.output_dir / "Theo" / "2026-08-30_000000_Neues_langes_Video.txt"
     assert txt.exists()
