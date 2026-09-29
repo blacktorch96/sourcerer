@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Transkripte - ytdigest{% endblock %}
 {% block content %}
   <h1>Transkripte</h1>
@@ -16,47 +17,51 @@
   </form>
 
   {% if sync_error %}
-    <p class="muted">Live-Abgleich mit dem Feed fehlgeschlagen ({{ sync_error }}) - zeige den
-      zuletzt bekannten Stand.</p>
+    <ul class="flashes">
+      <li class="flash flash-error">Live-Abgleich mit dem Feed fehlgeschlagen ({{ sync_error }}) -
+        zeige den zuletzt bekannten Stand.</li>
+    </ul>
   {% endif %}
 
-  {% if selected_feed_id %}{% include "_joblog.html" %}{% endif %}
+  {% if selected_feed_id %}<div class="card">{% include "_joblog.html" %}</div>{% endif %}
 
-  <table class="transcripts-table" id="transcripts-table">
-    <thead>
-      <tr><th>Titel</th><th>Veröffentlicht</th><th>Dauer</th><th>Quelle</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for video, is_done in rows %}
-        {% set too_short = video.status == 'skipped' and video.skip_reason == 'too_short' %}
-        <tr class="{{ 'pending-row' if not is_done else '' }}">
-          <td class="title-cell">
-            {% if is_done %}
-              <a href="{{ url_for('transcripts.detail', video_id=video.video_id) }}">{{ video.title }}</a>
-            {% elif too_short %}
-              {{ video.title }} <span class="pending-tag">übersprungen (zu kurz)</span>
-            {% else %}
-              {{ video.title }} <span class="pending-tag">noch nicht verfügbar</span>
-            {% endif %}
-          </td>
-          <td>{{ video.published_at[:10] }}</td>
-          <td>
-            {% if video.duration_s %}{{ video.duration_s // 60 }}:{{ '%02d' % (video.duration_s % 60) }}{% else %}—{% endif %}
-          </td>
-          <td>{{ video.source or "—" }}</td>
-          <td>
-            {% if is_done %}
-              <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='txt') }}">.txt</a>
-              <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='json') }}">.json</a>
-            {% elif not too_short %}
-              <form class="job-form" method="post" action="{{ url_for('transcripts.process', video_id=video.video_id) }}">
-                <button type="submit" {{ 'disabled' if jobs.running else '' }}>Herunterladen &amp; transkribieren</button>
-              </form>
-            {% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="card table-card">
+    <table class="transcripts-table" id="transcripts-table">
+      <thead>
+        <tr><th>Titel</th><th>Status</th><th>Veröffentlicht</th><th>Dauer</th><th>Quelle</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for video, is_done in rows %}
+          {% set too_short = video.status == 'skipped' and video.skip_reason == 'too_short' %}
+          <tr class="{{ 'pending-row' if not is_done else '' }}">
+            <td class="title-cell">
+              {% if is_done %}
+                <a href="{{ url_for('transcripts.detail', video_id=video.video_id) }}">{{ video.title }}</a>
+              {% else %}
+                {{ video.title }}
+              {% endif %}
+            </td>
+            <td>
+              {% if is_done %}{{ icons.done_icon() }}
+              {% elif too_short %}{{ icons.too_short_icon() }}
+              {% else %}{{ icons.pending_icon(video.video_id, jobs.running) }}
+              {% endif %}
+            </td>
+            <td>{{ video.published_at[:10] }}</td>
+            <td>
+              {% if video.duration_s %}{{ video.duration_s // 60 }}:{{ '%02d' % (video.duration_s % 60) }}{% else %}—{% endif %}
+            </td>
+            <td>{{ video.source or "—" }}</td>
+            <td>
+              {% if is_done %}
+                <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='txt') }}">.txt</a>
+                <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='json') }}">.json</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% if not rows %}<p class="muted">Keine Videos für diese Auswahl.</p>{% endif %}
 {% endblock %}

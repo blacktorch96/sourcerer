@@ -156,10 +156,11 @@ def test_dashboard_shows_nothing_new_when_sync_found_nothing(app, client):
 
 
 def test_feeds_page_lists_feed(client, cfg, conn):
-    _seed_feed_with_done_video(cfg, conn)
+    feed = _seed_feed_with_done_video(cfg, conn)
     resp = client.get("/feeds")
     assert resp.status_code == 200
     assert b"Test Kanal" in resp.data
+    assert f'href="/transcripts?feed={feed.id}"'.encode() in resp.data
 
 
 def test_feeds_add_writes_feeds_txt_and_starts_job(app, client, cfg):
@@ -308,7 +309,7 @@ def test_transcripts_shows_pending_video_with_action_button(client, cfg, conn, m
     resp = client.get(f"/transcripts?feed={feed.id}")
     assert resp.status_code == 200
     assert b"Zweites Video, noch offen" in resp.data
-    assert b"noch nicht verf\xc3\xbcgbar" in resp.data
+    assert b"Herunterladen &amp; transkribieren" in resp.data
     assert b"/transcripts/vid002/process" in resp.data
 
 

@@ -4,16 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}ytdigest{% endblock %}</title>
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ asset_url('favicon.svg') }}">
+  <link rel="stylesheet" href="{{ asset_url('style.css') }}">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="{{ url_for('dashboard.index') }}">ytdigest</a>
+    <a class="brand" href="{{ url_for('dashboard.index') }}">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="7" fill="#6366f1"/>
+        <path d="M12 9 L22 16 L12 23 Z" fill="#ffffff"/>
+        <rect x="9" y="25" width="14" height="2.4" rx="1.2" fill="#ffffff" opacity="0.9"/>
+      </svg>
+      ytdigest
+    </a>
     <nav>
-      <a href="{{ url_for('dashboard.index') }}">Dashboard</a>
-      <a href="{{ url_for('feeds.index') }}">Feeds</a>
-      <a href="{{ url_for('transcripts.index') }}">Transkripte</a>
+      <a href="{{ url_for('dashboard.index') }}"
+         class="{{ 'active' if request.endpoint == 'dashboard.index' else '' }}">Dashboard</a>
+      <a href="{{ url_for('feeds.index') }}"
+         class="{{ 'active' if request.endpoint and request.endpoint.startswith('feeds.') else '' }}">Feeds</a>
+      <a href="{{ url_for('transcripts.index') }}"
+         class="{{ 'active' if request.endpoint and request.endpoint.startswith('transcripts.') else '' }}">Transkripte</a>
     </nav>
   </header>
 
@@ -33,6 +43,6 @@
 
   <button id="to-top" class="to-top" type="button" aria-label="Nach oben" hidden>&uarr;</button>
 
-  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ asset_url('app.js') }}"></script>
 </body>
 </html>

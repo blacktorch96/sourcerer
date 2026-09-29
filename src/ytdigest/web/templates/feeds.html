@@ -3,50 +3,68 @@
 {% block content %}
   <h1>Feeds</h1>
 
-  <form class="add-feed" method="post" action="{{ url_for('feeds.add') }}">
-    <input type="text" name="source" placeholder="URL, Kanal-ID, @handle oder podcast:<RSS-URL>" required>
-    <input type="text" name="name" placeholder="Anzeigename (optional)">
-    <button type="submit">Hinzufügen</button>
-  </form>
+  <div class="card">
+    <form class="add-feed" method="post" action="{{ url_for('feeds.add') }}">
+      <input type="text" name="source" placeholder="URL, Kanal-ID, @handle oder podcast:<RSS-URL>" required>
+      <input type="text" name="name" placeholder="Anzeigename (optional)">
+      <button type="submit">Hinzufügen</button>
+    </form>
 
-  {% include "_joblog.html" %}
+    {% include "_joblog.html" %}
+  </div>
 
-  <table class="feeds-table">
-    <thead>
-      <tr>
-        <th>Kanal</th><th>Slug</th><th>Videos</th><th>Letzter Abruf</th><th>Aktiv</th><th>Aktionen</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for feed in feeds %}
+  <div class="card table-card">
+    <table class="feeds-table">
+      <colgroup>
+        <col style="width: 22%">
+        <col style="width: 16%">
+        <col style="width: 8%">
+        <col style="width: 12%">
+        <col style="width: 10%">
+        <col style="width: 290px">
+      </colgroup>
+      <thead>
         <tr>
-          <td>{{ feed.name }}</td>
-          <td><code>{{ feed.dir_slug }}</code></td>
-          <td>{{ counts.get(feed.id, 0) }}</td>
-          <td>{{ feed.last_checked_at or "—" }}</td>
-          <td>{{ "ja" if feed.is_active else "nein" }}</td>
-          <td class="actions">
-            <form class="job-form" method="post" action="{{ url_for('feeds.sync_one', feed_id=feed.id) }}">
-              <button type="submit" {{ 'disabled' if jobs.running else '' }}>Sync</button>
-            </form>
-
-            <form class="job-form backfill-form" method="post" action="{{ url_for('feeds.backfill', feed_id=feed.id) }}">
-              <input type="number" name="days" value="365" min="1" title="Tage zurück">
-              <input type="number" name="limit" placeholder="Limit" min="1" title="max. Videos (optional)">
-              <button type="submit" {{ 'disabled' if jobs.running else '' }}>Backfill</button>
-            </form>
-
-            <form method="post" action="{{ url_for('feeds.retry', feed_id=feed.id) }}">
-              <button type="submit">Retry</button>
-            </form>
-
-            <form method="post" action="{{ url_for('feeds.remove', feed_id=feed.id) }}"
-                  onsubmit="return confirm('{{ feed.name }} aus feeds.txt entfernen?');">
-              <button type="submit" class="danger">Entfernen</button>
-            </form>
-          </td>
+          <th>Kanal</th><th>Slug</th><th>Videos</th><th>Letzter Abruf</th><th>Status</th><th>Aktionen</th>
         </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for feed in feeds %}
+          <tr>
+            <td><a href="{{ url_for('transcripts.index', feed=feed.id) }}">{{ feed.name }}</a></td>
+            <td><code>{{ feed.dir_slug }}</code></td>
+            <td>{{ counts.get(feed.id, 0) }}</td>
+            <td>{{ feed.last_checked_at[:10] if feed.last_checked_at else "—" }}</td>
+            <td>
+              {% if feed.is_active %}
+                <span class="badge badge-success">aktiv</span>
+              {% else %}
+                <span class="badge badge-neutral">inaktiv</span>
+              {% endif %}
+            </td>
+            <td class="actions">
+              <form class="job-form" method="post" action="{{ url_for('feeds.sync_one', feed_id=feed.id) }}">
+                <button type="submit" {{ 'disabled' if jobs.running else '' }}>Sync</button>
+              </form>
+
+              <form class="job-form backfill-form" method="post" action="{{ url_for('feeds.backfill', feed_id=feed.id) }}">
+                <input type="number" name="days" value="365" min="1" title="Tage zurück">
+                <input type="number" name="limit" placeholder="Limit" min="1" title="max. Videos (optional)">
+                <button type="submit" {{ 'disabled' if jobs.running else '' }}>Backfill</button>
+              </form>
+
+              <form method="post" action="{{ url_for('feeds.retry', feed_id=feed.id) }}">
+                <button type="submit">Retry</button>
+              </form>
+
+              <form method="post" action="{{ url_for('feeds.remove', feed_id=feed.id) }}"
+                    onsubmit="return confirm('{{ feed.name }} aus feeds.txt entfernen?');">
+                <button type="submit" class="danger">Entfernen</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 {% endblock %}

@@ -3,49 +3,59 @@
 {% block content %}
   <h1>Dashboard</h1>
 
-  <table class="status-table">
-    <thead><tr><th>Zustand</th><th>Anzahl</th></tr></thead>
-    <tbody>
-      {% for name, count in rows %}
-        <tr><td>{{ name }}</td><td>{{ count }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="stat-grid">
+    {% for name, count in rows %}
+      {% set tone = {
+        'discovered': 'info', 'processing': 'info', 'done': 'success',
+        'no_transcript': 'warning', 'failed': 'danger', 'skipped': 'neutral',
+      }.get(name, 'neutral') %}
+      <div class="stat-tile tone-{{ tone }}">
+        <span class="stat-value">{{ count }}</span>
+        <span class="stat-label">{{ name }}</span>
+      </div>
+    {% endfor %}
+  </div>
 
-  <form class="job-form" method="post" action="{{ url_for('jobs.run_all') }}">
-    <button type="submit" {{ 'disabled' if jobs.running else '' }}>Sync &amp; Verarbeitung jetzt starten</button>
-  </form>
+  <div class="card">
+    <form class="job-form" method="post" action="{{ url_for('jobs.run_all') }}">
+      <button type="submit" {{ 'disabled' if jobs.running else '' }}>Sync &amp; Verarbeitung jetzt starten</button>
+    </form>
 
-  {% include "_joblog.html" %}
+    {% include "_joblog.html" %}
+  </div>
 
   <h2>Letzter Sync</h2>
-  {% if jobs.last_report is none %}
-    <p class="muted">Noch kein Lauf seit dem Start der Web-Oberfläche.</p>
-  {% elif jobs.last_report.processed_titles %}
-    <ul class="processed-list">
-      {% for title in jobs.last_report.processed_titles %}
-        <li>{{ title }}</li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="muted">Keine neuen Transkripte beim letzten Sync.</p>
-  {% endif %}
+  <div class="card">
+    {% if jobs.last_report is none %}
+      <p class="muted">Noch kein Lauf seit dem Start der Web-Oberfläche.</p>
+    {% elif jobs.last_report.processed_titles %}
+      <ul class="processed-list">
+        {% for title in jobs.last_report.processed_titles %}
+          <li>{{ title }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Keine neuen Transkripte beim letzten Sync.</p>
+    {% endif %}
+  </div>
 
   <h2>Letzte Fehler</h2>
-  {% if errors %}
-    <table class="error-table">
-      <thead><tr><th>Video</th><th>Titel</th><th>Fehler</th></tr></thead>
-      <tbody>
-        {% for video in errors %}
-          <tr>
-            <td><code>{{ video.video_id }}</code></td>
-            <td>{{ video.title }}</td>
-            <td>{{ video.last_error }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p class="muted">Keine Fehler.</p>
-  {% endif %}
+  <div class="card {{ 'table-card' if errors else '' }}">
+    {% if errors %}
+      <table class="error-table">
+        <thead><tr><th>Video</th><th>Titel</th><th>Fehler</th></tr></thead>
+        <tbody>
+          {% for video in errors %}
+            <tr>
+              <td><code>{{ video.video_id }}</code></td>
+              <td>{{ video.title }}</td>
+              <td class="text-danger">{{ video.last_error }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Keine Fehler.</p>
+    {% endif %}
+  </div>
 {% endblock %}

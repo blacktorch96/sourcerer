@@ -1,26 +1,65 @@
+/* Farbschema: Indigo als Akzent (ruhiger/moderner als reines Web-Blau),
+   Grün/Amber/Rot als feste Status-Semantik über beide Modi hinweg -
+   Bedeutung einer Farbe bleibt gleich, nur ihr Ton passt sich an. */
 :root {
-  --bg: #ffffff;
-  --fg: #1a1a1a;
-  --muted: #666666;
-  --border: #dddddd;
-  --accent: #2563eb;
-  --danger: #b91c1c;
-  --panel-bg: #f5f5f5;
-  --log-bg: #111111;
-  --log-fg: #d8d8d8;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-fg: #ffffff;
+  --accent-soft: #eef2ff;
+
+  --success: #059669;
+  --success-soft: #d1fae5;
+  --warning: #b45309;
+  --warning-soft: #fef3c7;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --info: #4f46e5;
+  --info-soft: #e0e7ff;
+  --neutral: #64748b;
+  --neutral-soft: #f1f5f9;
+
+  --log-bg: #0f172a;
+  --log-fg: #d6deeb;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121212;
-    --fg: #e6e6e6;
-    --muted: #999999;
-    --border: #333333;
-    --accent: #60a5fa;
+    --bg: #0b0e14;
+    --surface: #151a24;
+    --fg: #e2e8f0;
+    --muted: #8b96a8;
+    --border: #262c3a;
+
+    --accent: #818cf8;
+    --accent-hover: #a5b4fc;
+    --accent-fg: #0b0e14;
+    --accent-soft: #1e2333;
+
+    --success: #34d399;
+    --success-soft: #113328;
+    --warning: #fbbf24;
+    --warning-soft: #3a2a0c;
     --danger: #f87171;
-    --panel-bg: #1c1c1c;
-    --log-bg: #0a0a0a;
-    --log-fg: #cfcfcf;
+    --danger-soft: #3a1414;
+    --info: #a5b4fc;
+    --info-soft: #1e2333;
+    --neutral: #8b96a8;
+    --neutral-soft: #1b212c;
+
+    --log-bg: #05070c;
+    --log-fg: #cbd5e1;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.35);
   }
 }
 
@@ -30,78 +69,246 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 15px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* ------------------------------------------------------------------ nav */
 .topbar {
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 12px 20px;
+  gap: 28px;
+  padding: 14px 24px;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
-.topbar .brand { font-weight: 700; text-decoration: none; color: var(--fg); }
-.topbar nav a { margin-right: 16px; color: var(--fg); text-decoration: none; }
-.topbar nav a:hover { color: var(--accent); }
+.topbar .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 1.05em;
+  text-decoration: none;
+  color: var(--fg);
+}
 
-main { max-width: 960px; margin: 0 auto; padding: 20px; }
+.brand-mark { width: 22px; height: 22px; border-radius: 6px; flex: none; }
 
-h1 { font-size: 1.4em; }
-h2 { font-size: 1.1em; margin-top: 2em; }
+.topbar nav { display: flex; gap: 4px; }
+.topbar nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+}
+.topbar nav a:hover { color: var(--fg); background: var(--neutral-soft); }
+.topbar nav a.active { color: var(--accent); background: var(--accent-soft); }
 
-table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
-th { color: var(--muted); font-weight: 600; font-size: 0.9em; }
+main { max-width: 1040px; margin: 0 auto; padding: 28px 24px 80px; }
+
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }
+
+h1 { font-size: 1.5em; margin: 0 0 20px; letter-spacing: -0.01em; }
+h2 {
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 2.2em 0 10px;
+}
+
+/* ---------------------------------------------------------------- cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+}
+
+.card + .card { margin-top: 16px; }
+
+.table-card { padding: 0; overflow-x: auto; }
+.table-card table { margin: 0; }
+.table-card th, .table-card td { padding: 10px 16px; }
+.table-card thead th { background: var(--neutral-soft); }
+/* rundet nur die äußerste Zeile sichtbar ab, ohne den Tabelleninhalt beim
+   horizontalen Scrollen abzuschneiden (siehe overflow-x oben) */
+.table-card tr:first-child th:first-child { border-top-left-radius: var(--radius); }
+.table-card tr:first-child th:last-child { border-top-right-radius: var(--radius); }
+
+/* ------------------------------------------------------------ stat-grid */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.stat-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--tile-color, var(--border));
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.stat-tile .stat-value { font-size: 1.7em; font-weight: 700; line-height: 1.1; }
+.stat-tile .stat-label {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-tile.tone-success { --tile-color: var(--success); }
+.stat-tile.tone-info { --tile-color: var(--info); }
+.stat-tile.tone-warning { --tile-color: var(--warning); }
+.stat-tile.tone-danger { --tile-color: var(--danger); }
+.stat-tile.tone-neutral { --tile-color: var(--neutral); }
+
+/* -------------------------------------------------------------- badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-success { background: var(--success-soft); color: var(--success); }
+.text-danger { color: var(--danger); }
+.badge-info { background: var(--info-soft); color: var(--info); }
+.badge-warning { background: var(--warning-soft); color: var(--warning); }
+.badge-danger { background: var(--danger-soft); color: var(--danger); }
+.badge-neutral { background: var(--neutral-soft); color: var(--neutral); }
+
+/* -------------------------------------------------------------- tables */
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:last-child td { border-bottom: none; }
+th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+tbody tr:hover td { background: var(--neutral-soft); }
+
+/* Auto-Layout berechnet die Mindestbreite einer Zelle mit einem
+   flex-wrap-Kind (siehe .actions) browserübergreifend uneinheitlich - oft
+   wird die ungebrochene Breite angenommen, als könnte der Inhalt gar nicht
+   umbrechen. Festes Layout mit expliziten Spaltenbreiten (siehe <colgroup>
+   in feeds.html) umgeht diese Berechnung komplett. */
+.feeds-table { table-layout: fixed; }
+.feeds-table td, .feeds-table th { overflow-wrap: break-word; }
 
 code {
-  background: var(--panel-bg);
-  padding: 1px 5px;
-  border-radius: 3px;
+  background: var(--neutral-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
   font-size: 0.9em;
 }
 
 .muted { color: var(--muted); }
 
-.processed-list { margin: 0 0 16px; padding-left: 20px; }
+.processed-list { margin: 0; padding-left: 20px; }
 .processed-list li { margin-bottom: 4px; }
 
-.flashes { list-style: none; padding: 0; margin: 0 0 16px; }
-.flash { padding: 8px 12px; border-radius: 4px; margin-bottom: 6px; }
-.flash-ok { background: #16a34a22; border: 1px solid #16a34a55; }
-.flash-error { background: #dc262622; border: 1px solid #dc262655; }
+/* ------------------------------------------------------------- flashes */
+.flashes { list-style: none; padding: 0; margin: 0 0 16px; display: flex; flex-direction: column; gap: 8px; }
+.flash { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.92em; }
+.flash-ok { background: var(--success-soft); color: var(--success); }
+.flash-error { background: var(--danger-soft); color: var(--danger); }
 
+/* --------------------------------------------------------------- forms */
 form { display: inline-flex; gap: 6px; align-items: center; }
 .add-feed { display: flex; margin-bottom: 16px; }
 .add-feed input[type=text] { flex: 1; }
 
 input, select, button {
   font: inherit;
-  padding: 5px 8px;
+  padding: 7px 10px;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--fg);
 }
 
-button { cursor: pointer; }
-button:hover { border-color: var(--accent); }
+input:focus, select:focus, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  cursor: pointer;
+  font-weight: 600;
+  background: var(--neutral-soft);
+  border-color: transparent;
+  transition: background-color 0.12s, opacity 0.12s;
+}
+button:hover { background: var(--border); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
-button.danger { color: var(--danger); }
 
-.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.add-feed button, .job-form > button, .filter-bar button {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.add-feed button:hover, .job-form > button:hover { background: var(--accent-hover); }
+
+button.danger { background: var(--danger-soft); color: var(--danger); }
+button.danger:hover { background: var(--danger); color: var(--accent-fg); }
+
+/* feste (nicht nur maximale) Breite: eine Tabellenzelle mit 'auto'-Layout
+   würde eine bloße max-width sonst ignorieren und trotzdem so breit werden
+   wie der unumbrochene Inhalt es verlangt - erst 'width' erzwingt den
+   Umbruch der vier Formulare zuverlässig */
+.actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
 .actions form { flex-wrap: nowrap; }
-.backfill-form input[type=number] { width: 70px; }
+.backfill-form input[type=number] { width: 66px; }
 
+/* --------------------------------------------------------------- jobs */
 .job-panel { margin: 16px 0; }
-.job-status { color: var(--muted); font-size: 0.9em; margin-bottom: 6px; }
+.job-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9em;
+  margin-bottom: 8px;
+}
+.job-status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--neutral);
+  flex: none;
+}
+.job-panel[data-running="true"] .job-status::before {
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
+}
+
 .job-log {
   background: var(--log-bg);
   color: var(--log-fg);
-  padding: 10px 12px;
-  border-radius: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
   max-height: 320px;
   overflow-y: auto;
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
@@ -109,51 +316,63 @@ button.danger { color: var(--danger); }
   white-space: pre-wrap;
 }
 
-.filter-bar { margin-bottom: 12px; }
+/* --------------------------------------------------------- transcripts */
+.filter-bar { display: flex; gap: 8px; margin-bottom: 14px; }
 .filter-bar input[type=text] { min-width: 240px; }
 
 .pending-row { color: var(--muted); }
-.pending-row td { border-bottom-color: var(--border); }
-.pending-tag {
-  font-size: 0.8em;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: var(--panel-bg);
+
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: help;
 }
+.status-icon.tone-neutral { background: var(--neutral-soft); color: var(--neutral); }
+.status-icon.tone-warning { background: var(--warning-soft); color: var(--warning); }
+.status-icon.tone-success { background: var(--success-soft); color: var(--success); }
+.status-icon.tone-info { background: var(--info-soft); color: var(--info); }
+
+/* pending_icon() ist ein echter Button (löst 'herunterladen & transkribieren'
+   aus), die anderen Status-Icons sind rein informativ (nur Tooltip) */
+button.status-icon { cursor: pointer; }
+button.status-icon:hover { filter: brightness(0.92); }
+button.status-icon:disabled { cursor: not-allowed; }
+.status-icon-form { margin: 0; }
 
 .transcript-text {
   font-size: 1em;
-  line-height: 1.7;
-  background: var(--panel-bg);
-  padding: 16px;
-  border-radius: 6px;
+  line-height: 1.75;
 }
 
-.transcript-text p {
-  margin: 0 0 1em;
-}
+.transcript-text p { margin: 0 0 1em; }
+.transcript-text p:last-child { margin-bottom: 0; }
 
-.transcript-text p:last-child {
-  margin-bottom: 0;
-}
+.meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.downloads { margin: 14px 0; display: flex; gap: 8px; }
+.downloads a, .meta a { text-decoration: none; font-weight: 600; }
+.downloads a:hover, .meta a:hover { text-decoration: underline; }
 
-.meta { color: var(--muted); }
-.downloads { margin-bottom: 16px; }
-
+/* -------------------------------------------------------------- to-top */
 .to-top {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: 50%;
   font-size: 1.2em;
   line-height: 1;
-  background: var(--panel-bg);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  background: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: var(--shadow);
   z-index: 10;
 }
-
+.to-top:hover { background: var(--accent-hover); }
 .to-top[hidden] { display: none; }
