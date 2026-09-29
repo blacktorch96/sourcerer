@@ -81,7 +81,7 @@ class Repo:
         sql = "SELECT * FROM feeds"
         if active_only:
             sql += " WHERE is_active = 1"
-        sql += " ORDER BY dir_slug"
+        sql += " ORDER BY dir_slug COLLATE NOCASE"
         return [_feed_from_row(r) for r in self.conn.execute(sql)]
 
     def get_feed_by_resolved_from(self, token: str) -> Feed | None:

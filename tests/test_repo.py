@@ -74,3 +74,19 @@ def test_deactivate_missing_feeds(conn):
     _feed(repo)
     assert repo.deactivate_missing_feeds({"UCother"}) == 1
     assert repo.list_feeds()[0].is_active is False
+
+
+def test_list_feeds_sorts_case_insensitively(conn):
+    repo = Repo(conn)
+    # 'todocast' beginnt klein, müsste bei reiner Byte-Sortierung (Großbuchstaben
+    # vor Kleinbuchstaben) hinter allen groß geschriebenen Slugs landen -
+    # case-insensitiv gehört es alphabetisch zwischen 'Alex' und 'Becoming'
+    repo.create_feed(channel_id="UCa", feed_url="https://a", dir_slug="Becoming_CTO",
+                     channel_title="Becoming CTO", display_name=None)
+    repo.create_feed(channel_id="UCb", feed_url="https://b", dir_slug="todocast_Podcast",
+                     channel_title="todocast Podcast", display_name=None)
+    repo.create_feed(channel_id="UCc", feed_url="https://c", dir_slug="Alex_Ziskind",
+                     channel_title="Alex Ziskind", display_name=None)
+
+    slugs = [f.dir_slug for f in repo.list_feeds()]
+    assert slugs == ["Alex_Ziskind", "Becoming_CTO", "todocast_Podcast"]
