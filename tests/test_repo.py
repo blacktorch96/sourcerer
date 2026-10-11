@@ -60,6 +60,47 @@ def test_finish_done_sets_paths_and_counts(conn):
     assert video.word_count == 2
 
 
+def test_recent_done_orders_by_processed_at_desc(conn):
+    repo = Repo(conn)
+    feed = _feed(repo)
+    result = TranscriptResult(text="hallo welt", source="captions_auto", language="de")
+    for video_id, processed in (
+        ("vid00000001", "2026-08-01T00:00:00Z"),
+        ("vid00000002", "2026-08-03T00:00:00Z"),
+        ("vid00000003", "2026-08-02T00:00:00Z"),
+    ):
+        repo.add_video(_entry(video_id), feed.id, status="discovered")
+        repo.mark_processing(video_id)
+        repo.finish_done(video_id, result, transcript_path=f"Theo/{video_id}.txt",
+                         metadata_path=f"Theo/{video_id}.json")
+        repo.conn.execute("UPDATE videos SET processed_at = ? WHERE video_id = ?",
+                          (processed, video_id))
+
+    recent = repo.recent_done(limit=10)
+    assert [v.video_id for v in recent] == ["vid00000002", "vid00000003", "vid00000001"]
+
+
+def test_recent_done_respects_limit(conn):
+    repo = Repo(conn)
+    feed = _feed(repo)
+    result = TranscriptResult(text="hallo welt", source="captions_auto", language="de")
+    for i in range(3):
+        video_id = f"vid0000000{i}"
+        repo.add_video(_entry(video_id), feed.id, status="discovered")
+        repo.mark_processing(video_id)
+        repo.finish_done(video_id, result, transcript_path=f"Theo/{video_id}.txt",
+                         metadata_path=f"Theo/{video_id}.json")
+
+    assert len(repo.recent_done(limit=2)) == 2
+
+
+def test_recent_done_excludes_non_done_videos(conn):
+    repo = Repo(conn)
+    feed = _feed(repo)
+    repo.add_video(_entry(), feed.id, status="discovered")
+    assert repo.recent_done() == []
+
+
 def test_requeue_failed(conn):
     repo = Repo(conn)
     feed = _feed(repo)

@@ -14,6 +14,28 @@
     <a href="{{ url_for('transcripts.download', video_id=video.video_id, ext='json') }}">Download .json</a>
   </p>
 
+  <h2>Zusammenfassung</h2>
+  {% if summary.text %}
+    <div class="card summary-text">{{ summary.text }}</div>
+  {% elif summary.error %}
+    <div class="card">
+      <p class="text-danger">Zusammenfassung fehlgeschlagen: {{ summary.error }}</p>
+    </div>
+  {% endif %}
+  <div class="card">
+    <form class="job-form" method="post"
+          action="{{ url_for('summary.summarize', video_id=video.video_id) }}">
+      <button type="submit" {{ 'disabled' if jobs.running else '' }}>
+        {% if summary.text %}Neu generieren
+        {% elif summary.error %}Erneut versuchen
+        {% else %}Zusammenfassung erstellen
+        {% endif %}
+      </button>
+    </form>
+    {% include "_joblog.html" %}
+  </div>
+
+  <h2>Transkript</h2>
   <div class="card transcript-text">
     {% for paragraph in paragraphs %}
       <p>{{ paragraph }}</p>

@@ -24,6 +24,8 @@
          class="{{ 'active' if request.endpoint and request.endpoint.startswith('feeds.') else '' }}">Feeds</a>
       <a href="{{ url_for('transcripts.index') }}"
          class="{{ 'active' if request.endpoint and request.endpoint.startswith('transcripts.') else '' }}">Transkripte</a>
+      <a href="{{ url_for('settings.index') }}"
+         class="{{ 'active' if request.endpoint and request.endpoint.startswith('settings.') else '' }}">Einstellungen</a>
     </nav>
   </header>
 

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen - ytdigest{% endblock %}
+{% block content %}
+  <h1>Einstellungen</h1>
+
+  <h2>Dauerfilter</h2>
+  <div class="card">
+    <form method="post" action="{{ url_for('settings.update_filters') }}">
+      <label for="min_duration_min">Videos kürzer als</label>
+      <input type="number" id="min_duration_min" name="min_duration_min" min="0"
+             value="{{ cfg.filters.min_duration_min }}">
+      <span>Minuten gelten als "zu kurz" und werden übersprungen</span>
+      <button type="submit">Speichern</button>
+    </form>
+  </div>
+
+  <h2>Zusammenfassung (Ollama)</h2>
+  <div class="card">
+    <form method="post" action="{{ url_for('settings.update_summary_model') }}">
+      <label for="model">Modell</label>
+      {% if ollama_models %}
+        <select id="model" name="model">
+          {% for name in ollama_models %}
+            <option value="{{ name }}" {{ 'selected' if name == cfg.summary.model else '' }}>
+              {{ name }}
+            </option>
+          {% endfor %}
+          {% if cfg.summary.model not in ollama_models %}
+            <option value="{{ cfg.summary.model }}" selected>{{ cfg.summary.model }} (nicht installiert)</option>
+          {% endif %}
+        </select>
+      {% else %}
+        <input type="text" id="model" name="model" value="{{ cfg.summary.model }}">
+      {% endif %}
+      <button type="submit">Speichern</button>
+    </form>
+    {% if not ollama_models %}
+      <p class="muted">Ollama unter {{ cfg.summary.ollama_host }} gerade nicht erreichbar -
+        Modellname von Hand eingeben (muss bei Ollama installiert sein, z. B. per
+        <code>ollama pull {{ cfg.summary.model }}</code>).</p>
+    {% endif %}
+  </div>
+{% endblock %}

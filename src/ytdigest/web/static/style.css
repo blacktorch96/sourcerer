@@ -353,6 +353,14 @@ button.status-icon:disabled { cursor: not-allowed; }
 .transcript-text p { margin: 0 0 1em; }
 .transcript-text p:last-child { margin-bottom: 0; }
 
+.summary-text {
+  white-space: pre-wrap;
+  font-size: 1em;
+  line-height: 1.7;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+}
+
 .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .downloads { margin: 14px 0; display: flex; gap: 8px; }
 .downloads a, .meta a { text-decoration: none; font-weight: 600; }

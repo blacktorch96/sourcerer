@@ -47,3 +47,6 @@ service_account_file = "service_account.json"       # Key-Datei eines Google-Clo
 folder_id            = ""                           # ID des Drive-Zielordners (mit der Service-Account-E-Mail teilen!)
 mirror_subdirs       = true                         # je Kanal einen Unterordner wie lokal (dir_slug) anlegen
 upload_sidecar       = true                         # auch die .json-Metadatei mit hochladen
+
+[summary]
+model = "gpt-oss:20b"

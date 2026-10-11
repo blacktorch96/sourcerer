@@ -126,6 +126,28 @@ Cron-Aufruf, sondern bekommt stattdessen eine "Lock gehalten"-Meldung im
 Live-Log. Es läuft immer nur ein Job gleichzeitig, unabhängig davon, wie
 viele Browser-Tabs offen sind.
 
+### Zusammenfassung (experimentell)
+
+Auf jeder Transkript-Detailseite lässt sich per Button eine Zusammenfassung
+über ein lokal laufendes [Ollama](https://ollama.com) erzeugen. Bewusst
+isoliert vom Rest des Tools gehalten (eigene Dateien, kein Eingriff in die
+Sync-/ASR-Pipeline oder das Datenmodell), weil das Feature noch getestet
+wird und sich je nach Ergebnis wieder komplett entfernen lässt:
+
+- `src/ytdigest/sources/ollama_summarize.py` - der eigentliche Ollama-Aufruf
+- `src/ytdigest/web/summary_views.py` - Route + Ablagelogik, mit
+  Entfernungsanleitung im Datei-Kopf
+- Konfiguration unter `[summary]` in `config.toml` (Modell, Prompt,
+  Zeichenobergrenzen, Ollama-Host) - siehe Kommentare in `config.py`
+
+Ablage als `<transkript-basename>.summary.md` neben dem Transkript, ein
+fehlgeschlagener Versuch als `.summary.error.txt` (wird auf der Detailseite
+mit "Erneut versuchen"-Button angezeigt, bis ein Versuch klappt).
+
+```bash
+ollama pull qwen3.5:9b     # oder ein anderes lokal installiertes Modell
+```
+
 ## Formatierung einzeiliger Transkripte
 
 ASR (faster-whisper) und manche Caption-Spuren mit sehr langen Cues liefern den

@@ -30,12 +30,32 @@
       <p class="muted">Noch kein Lauf seit dem Start der Web-Oberfläche.</p>
     {% elif jobs.last_report.processed_titles %}
       <ul class="processed-list">
-        {% for title in jobs.last_report.processed_titles %}
-          <li>{{ title }}</li>
+        {% for entry in jobs.last_report.processed_titles %}
+          <li>{{ entry }}</li>
         {% endfor %}
       </ul>
     {% else %}
       <p class="muted">Keine neuen Transkripte beim letzten Sync.</p>
+    {% endif %}
+  </div>
+
+  <h2>Zuletzt hinzugefügt</h2>
+  <div class="card {{ 'table-card' if recent else '' }}">
+    {% if recent %}
+      <table class="recent-table">
+        <thead><tr><th>Kanal</th><th>Video</th><th>Hinzugefügt</th></tr></thead>
+        <tbody>
+          {% for video, feed in recent %}
+            <tr>
+              <td>{{ feed.name if feed else "—" }}</td>
+              <td><a href="{{ url_for('transcripts.detail', video_id=video.video_id) }}">{{ video.title }}</a></td>
+              <td>{{ video.processed_at[:16].replace('T', ' ') if video.processed_at else "—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Noch keine fertigen Transkripte.</p>
     {% endif %}
   </div>
 

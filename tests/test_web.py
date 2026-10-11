@@ -155,6 +155,25 @@ def test_dashboard_shows_nothing_new_when_sync_found_nothing(app, client):
     assert b"Keine neuen Transkripte" in resp.data
 
 
+def test_dashboard_shows_no_recent_transcripts_placeholder(client):
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Noch keine fertigen Transkripte" in resp.data
+
+
+def test_dashboard_shows_recently_added_transcripts(client, cfg, conn):
+    _seed_feed_with_done_video(cfg, conn)
+    conn.execute("UPDATE videos SET processed_at = '2026-09-30T08:00:00Z' "
+                "WHERE video_id = 'vid001'")
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Zuletzt hinzugef" in resp.data
+    assert b"Test Kanal" in resp.data
+    assert b"Erstes Video" in resp.data
+    assert b"2026-09-30 08:00" in resp.data
+
+
 def test_feeds_page_lists_feed(client, cfg, conn):
     feed = _seed_feed_with_done_video(cfg, conn)
     resp = client.get("/feeds")
@@ -284,6 +303,26 @@ def test_transcripts_list_and_detail_and_download(client, cfg, conn):
 
     missing = client.get("/transcripts/does-not-exist")
     assert missing.status_code == 404
+
+
+def test_transcript_detail_shows_create_button_when_no_summary(client, cfg, conn):
+    _seed_feed_with_done_video(cfg, conn)
+    resp = client.get("/transcripts/vid001")
+    assert resp.status_code == 200
+    assert b"Zusammenfassung erstellen" in resp.data
+
+
+def test_transcript_detail_shows_existing_summary(client, cfg, conn):
+    _seed_feed_with_done_video(cfg, conn)
+    summary_path = cfg.paths.output_dir / "Test" / "2026-01-01_000000_Erstes_Video.summary.md"
+    summary_path.write_text("Kurz gesagt: Hallo Welt.", encoding="utf-8")
+
+    resp = client.get("/transcripts/vid001")
+    assert resp.status_code == 200
+    assert b"Kurz gesagt: Hallo Welt." in resp.data
+    assert b"Zusammenfassung erstellen" not in resp.data
+    assert b"Neu generieren" in resp.data
+    assert b"/transcripts/vid001/summarize" in resp.data
 
 
 def test_transcripts_download_rejects_path_traversal(client, cfg, conn):

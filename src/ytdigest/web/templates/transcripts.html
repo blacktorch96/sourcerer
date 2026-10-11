@@ -31,7 +31,7 @@
         <tr><th>Titel</th><th>Status</th><th>Veröffentlicht</th><th>Dauer</th><th>Quelle</th><th></th></tr>
       </thead>
       <tbody>
-        {% for video, is_done in rows %}
+        {% for video, is_done, has_summary in rows %}
           {% set too_short = video.status == 'skipped' and video.skip_reason == 'too_short' %}
           <tr class="{{ 'pending-row' if not is_done else '' }}">
             <td class="title-cell">
@@ -45,6 +45,22 @@
               {% if is_done %}{{ icons.done_icon() }}
               {% elif too_short %}{{ icons.too_short_icon(video.video_id, jobs.running) }}
               {% else %}{{ icons.pending_icon(video.video_id, jobs.running) }}
+              {% endif %}
+              {% if has_summary %}
+                {# Zusammenfassung ist experimentell (siehe web/summary_views.py) -
+                   dieser Block kann beim Entfernen des Features einfach raus #}
+                <span class="status-icon tone-info" title="Zusammenfassung vorhanden"
+                      aria-label="Zusammenfassung vorhanden">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M8 6h13"/>
+                    <path d="M8 12h13"/>
+                    <path d="M8 18h13"/>
+                    <path d="M3 6h.01"/>
+                    <path d="M3 12h.01"/>
+                    <path d="M3 18h.01"/>
+                  </svg>
+                </span>
               {% endif %}
             </td>
             <td>{{ video.published_at[:10] }}</td>

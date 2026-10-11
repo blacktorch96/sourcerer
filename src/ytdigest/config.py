@@ -93,6 +93,35 @@ class WebCfg(BaseModel):
     debug: bool = False
 
 
+class SummaryCfg(BaseModel):
+    """EXPERIMENTELL - lokale Zusammenfassung über Ollama, siehe
+    sources/ollama_summarize.py und web/summary_views.py. Bewusst als eigener
+    Abschnitt gehalten, damit sich das Feature bei Bedarf komplett entfernen
+    lässt, ohne andere Config-Abschnitte anzufassen."""
+
+    enabled: bool = True
+    ollama_host: str = "http://127.0.0.1:11434"
+    model: str = "qwen3.5:9b"
+    max_chars: int = 1000        # Zielobergrenze für die erzeugte Zusammenfassung
+    max_input_chars: int = 100_000  # siehe ollama_summarize.py: Herleitung aus num_ctx
+    num_ctx: int = 32768         # an Ollama übergebenes Kontextfenster (Tokens);
+                                 # größer = mehr Transkript passt rein, aber mehr VRAM
+    timeout_s: float = 300.0
+    prompt_template: str = (
+        "Du bekommst das Transkript einer Podcast- oder YouTube-Folge zu einem "
+        "Software-/Tech-Thema. Erstelle daraus eine kompakte Übersicht auf "
+        "Deutsch (maximal {max_chars} Zeichen) nach diesen Regeln:\n\n"
+        "- Stichpunkte statt Fließtext: eine Zeile pro Thema, eingeleitet mit '- '\n"
+        "- ein Stichpunkt pro besprochenem Thema, kurz und konkret\n"
+        "- genannte Tools, Modelle, Produkte oder Firmen beim Namen nennen\n"
+        "- Werbung, Sponsoring-Hinweise und Kanal-Eigenwerbung (Abo-Bitten, "
+        "Merch, Patreon o. Ä.) komplett ignorieren - das sind keine inhaltlichen Punkte\n"
+        "- keine Einleitung wie 'Diese Folge behandelt...' und keine Überschrift "
+        "wie 'Zusammenfassung:'\n\n"
+        "Transkript:\n{text}"
+    )
+
+
 class Config(BaseModel):
     paths: Paths = Field(default_factory=Paths)
     feeds: FeedsCfg = Field(default_factory=FeedsCfg)
@@ -103,6 +132,7 @@ class Config(BaseModel):
     local: LocalCfg = Field(default_factory=LocalCfg)
     gdrive: GDriveCfg = Field(default_factory=GDriveCfg)
     web: WebCfg = Field(default_factory=WebCfg)
+    summary: SummaryCfg = Field(default_factory=SummaryCfg)
 
     source_path: Path | None = None
 

@@ -21,7 +21,11 @@ def index():
         repo = Repo(conn)
         counts = repo.counts_by_status()
         errors = repo.recent_errors(10)
+        recent_done = repo.recent_done(10)
+        feeds_by_id = {f.id: f for f in repo.list_feeds()}
     finally:
         conn.close()
     rows = [(name, counts.get(name, 0)) for name in _STATUSES]
-    return render_template("dashboard.html", rows=rows, errors=errors, jobs=get_jobs())
+    recent = [(video, feeds_by_id.get(video.feed_id)) for video in recent_done]
+    return render_template("dashboard.html", rows=rows, errors=errors, recent=recent,
+                          jobs=get_jobs())

@@ -41,10 +41,14 @@ def create_app(cfg: Config) -> Flask:
     from ytdigest.web.dashboard_views import bp as dashboard_bp
     from ytdigest.web.feeds_views import bp as feeds_bp
     from ytdigest.web.jobs_views import bp as jobs_bp
+    from ytdigest.web.settings_views import bp as settings_bp
+    from ytdigest.web.summary_views import bp as summary_bp  # experimentell, siehe dortige Moduldoc
     from ytdigest.web.transcripts_views import bp as transcripts_bp
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(feeds_bp)
     app.register_blueprint(transcripts_bp)
     app.register_blueprint(jobs_bp)
+    app.register_blueprint(summary_bp)
+    app.register_blueprint(settings_bp)
     return app

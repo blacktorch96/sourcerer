@@ -15,6 +15,7 @@ from ytdigest.models import Feed
 from ytdigest.pipeline import RunOptions
 from ytdigest.sources import local, podcast
 from ytdigest.web.context import get_cfg, get_jobs
+from ytdigest.web.summary_views import get_summary_state  # experimentell, siehe dortige Moduldoc
 
 bp = Blueprint("transcripts", __name__, url_prefix="/transcripts")
 
@@ -155,6 +156,10 @@ def index():
         [(v, True) for v in videos] + [(v, False) for v in pending],
         key=lambda pair: pair[0].published_at, reverse=True,
     )
+    # has_summary nur für fertige Videos prüfen (and kurzschließt vorher) -
+    # experimentell, siehe web/summary_views.py
+    rows = [(video, is_done, is_done and get_summary_state(video.transcript_path).text is not None)
+           for video, is_done in rows]
     return render_template("transcripts.html", feeds=feeds, rows=rows,
                           selected_feed_id=feed_id, sync_error=sync_error, jobs=get_jobs())
 
@@ -172,8 +177,9 @@ def detail(video_id: str):
         conn.close()
     text = _safe_output_path(video.transcript_path).read_text(encoding="utf-8")
     paragraphs = _dewrap_paragraphs(text)
+    summary = get_summary_state(video.transcript_path)
     return render_template("transcript_detail.html", video=video, feed=feed,
-                          paragraphs=paragraphs)
+                          paragraphs=paragraphs, summary=summary, jobs=get_jobs())
 
 
 @bp.get("/<path:video_id>/download/<ext>")

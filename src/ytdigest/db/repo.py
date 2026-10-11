@@ -56,6 +56,7 @@ def _video_from_row(row: sqlite3.Row) -> Video:
         last_error=row["last_error"],
         skip_reason=row["skip_reason"],
         next_retry_at=row["next_retry_at"],
+        processed_at=row["processed_at"],
     )
 
 
@@ -289,6 +290,17 @@ class Repo:
         rows = self.conn.execute(
             "SELECT * FROM videos WHERE last_error IS NOT NULL "
             "ORDER BY processed_at DESC, first_seen_at DESC LIMIT ?",
+            (limit,),
+        )
+        return [_video_from_row(r) for r in rows]
+
+    def recent_done(self, limit: int = 10) -> list[Video]:
+        """Zuletzt fertig transkribierte Videos, neueste zuerst nach
+        ``processed_at`` (nicht ``published_at``) - fürs Dashboard: 'was ist
+        kürzlich neu transkribiert worden', unabhängig vom Upload-Datum."""
+        rows = self.conn.execute(
+            "SELECT * FROM videos WHERE status = 'done' AND processed_at IS NOT NULL "
+            "ORDER BY processed_at DESC LIMIT ?",
             (limit,),
         )
         return [_video_from_row(r) for r in rows]

@@ -71,6 +71,7 @@ class Video:
     last_error: str | None = None
     skip_reason: str | None = None
     next_retry_at: str | None = None
+    processed_at: str | None = None
 
 
 @dataclass(slots=True)
@@ -102,6 +103,16 @@ class TranscriptResult:
 
 
 @dataclass(slots=True)
+class SummaryResult:
+    """Ergebnis von sources/ollama_summarize.py - EXPERIMENTELL, siehe dortige
+    Moduldoc zur bewussten Abgrenzung vom Rest der Pipeline."""
+
+    text: str | None
+    error: str | None = None
+    truncated: bool = False
+
+
+@dataclass(slots=True)
 class RunReport:
     feeds_checked: int = 0
     feeds_failed: int = 0
@@ -113,8 +124,9 @@ class RunReport:
     skipped: int = 0
     failed: int = 0
     runtime_s: float = 0.0
-    processed_titles: list[str] = field(default_factory=list)  # für die Web-Oberfläche:
-                                                                # "im letzten Sync transkribiert"
+    processed_titles: list[str] = field(default_factory=list)  # je Eintrag "Kanal: Videotitel" -
+                                                                # für die Web-Oberfläche: "im
+                                                                # letzten Sync transkribiert"
 
     @property
     def exit_code(self) -> int:
