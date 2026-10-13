@@ -464,3 +464,21 @@ def test_jobs_status_and_stream_idle(client):
     stream = client.get("/jobs/stream")
     assert stream.status_code == 200
     assert b"idle" in stream.data
+
+
+def test_jobs_stream_frames_multiline_log_per_sse_line(app, client):
+    # eine mehrzeilige Logzeile (z. B. eine Ollama-Antwort über ask()) muss
+    # pro Zeile ein eigenes 'data:'-Präfix bekommen, sonst bricht SSE das
+    # Event am ersten eingebetteten Leerzeilen-Absatz vorzeitig ab
+    def fake_job(pipeline):
+        logging.getLogger("ytdigest").info("Zeile eins\nZeile zwei")
+        return RunReport()
+
+    jobs = app.extensions["ytdigest_jobs"]
+    assert jobs.start("Testjob", fake_job)
+
+    resp = client.get("/jobs/stream")
+    body = resp.get_data(as_text=True)
+    first_line, _, rest = body.partition("\n")
+    assert first_line.startswith("data: ") and first_line.endswith("Zeile eins")
+    assert rest.startswith("data: Zeile zwei\n\n")

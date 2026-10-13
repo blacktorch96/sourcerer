@@ -143,7 +143,12 @@ class JobRunner:
                     yield ": keep-alive\n\n"
                     continue
                 if item["type"] == "log":
-                    yield f"data: {item['text']}\n\n"
+                    # SSE verlangt pro Zeile ein eigenes 'data:'-Präfix - ein
+                    # rohes '\n' innerhalb eines 'data:'-Feldes würde das
+                    # Event vorzeitig beenden (relevant z. B. für eine
+                    # mehrzeilige Ollama-Antwort, siehe summary_views.ask()).
+                    payload = "\n".join(f"data: {line}" for line in item["text"].split("\n"))
+                    yield f"{payload}\n\n"
                 else:
                     yield f"event: done\ndata: {json.dumps(item)}\n\n"
                     break

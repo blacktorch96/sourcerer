@@ -32,6 +32,19 @@
         {% endif %}
       </button>
     </form>
+  </div>
+
+  <h2>Frage zum Transkript</h2>
+  <div class="card">
+    <form class="job-form ask-form" method="post" data-reload="false"
+          action="{{ url_for('summary.ask', video_id=video.video_id) }}">
+      <textarea name="question" rows="2" required
+                placeholder="z. B. Welche Tools wurden erwähnt?"></textarea>
+      <button type="submit" {{ 'disabled' if jobs.running else '' }}>Frage stellen</button>
+    </form>
+  </div>
+
+  <div class="card">
     {% include "_joblog.html" %}
   </div>
 

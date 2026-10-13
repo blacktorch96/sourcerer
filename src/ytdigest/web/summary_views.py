@@ -14,16 +14,20 @@ oder grundlegend geändert werden. Zum Entfernen genügt:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from flask import Blueprint, abort, jsonify
+from flask import Blueprint, abort, jsonify, request
 
+from ytdigest.config import Config
 from ytdigest.db.repo import Repo
 from ytdigest.db.schema import connect
-from ytdigest.models import RunReport
+from ytdigest.models import RunReport, Video
 from ytdigest.sources import ollama_summarize
 from ytdigest.web.context import get_cfg, get_jobs
+
+log = logging.getLogger(__name__)
 
 bp = Blueprint("summary", __name__, url_prefix="/transcripts")
 
@@ -66,9 +70,9 @@ def get_summary_state(transcript_path: str | None) -> SummaryState:
     return SummaryState()
 
 
-@bp.post("/<path:video_id>/summarize")
-def summarize(video_id: str):
-    cfg = get_cfg()
+def _done_video_with_transcript(cfg: Config, video_id: str) -> tuple[Video, Path]:
+    """Lädt ein fertiges Video + den aufgelösten Pfad zu seinem Transkript,
+    oder bricht mit 404 ab (unbekanntes Video, nicht fertig, Datei fehlt)."""
     conn = connect(cfg.paths.database)
     try:
         video = Repo(conn).get_video(video_id)
@@ -81,6 +85,14 @@ def summarize(video_id: str):
     transcript_abs = _resolve_existing(output_dir, Path(video.transcript_path))
     if transcript_abs is None:
         abort(404)
+    return video, transcript_abs
+
+
+@bp.post("/<path:video_id>/summarize")
+def summarize(video_id: str):
+    cfg = get_cfg()
+    video, transcript_abs = _done_video_with_transcript(cfg, video_id)
+    output_dir = cfg.paths.output_dir.resolve()
     summary_rel, error_rel = _paths(video.transcript_path)
     summary_abs = output_dir / summary_rel
     error_abs = output_dir / error_rel
@@ -103,6 +115,35 @@ def summarize(video_id: str):
 
     jobs = get_jobs()
     started = jobs.start(f"Zusammenfassung: {video.title}", job)
+    if not started:
+        return jsonify(ok=False, error=f"Läuft schon: {jobs.label}"), 409
+    return jsonify(ok=True)
+
+
+@bp.post("/<path:video_id>/ask")
+def ask(video_id: str):
+    """Freie Frage zum Transkript - Antwort wird nicht abgelegt, sondern nur
+    live übers Job-Log angezeigt (keine Historie, jede Frage ist für sich
+    genommen, immer neu auf Basis des ganzen Transkripts beantwortet)."""
+    cfg = get_cfg()
+    question = (request.form.get("question") or "").strip()
+    if not question:
+        return jsonify(ok=False, error="Bitte eine Frage eingeben."), 400
+
+    video, transcript_abs = _done_video_with_transcript(cfg, video_id)
+
+    def job(_pipeline):
+        text = transcript_abs.read_text(encoding="utf-8")
+        log.info("Frage: %s", question)
+        result = ollama_summarize.ask(text, question, cfg=cfg.summary)
+        if result.text:
+            log.info("Antwort: %s", result.text)
+        else:
+            log.warning("Frage fehlgeschlagen: %s", result.error)
+        return RunReport()
+
+    jobs = get_jobs()
+    started = jobs.start(f"Frage: {video.title}", job)
     if not started:
         return jsonify(ok=False, error=f"Läuft schon: {jobs.label}"), 409
     return jsonify(ok=True)

@@ -20,7 +20,7 @@
     qsa(".job-form button").forEach(function (btn) { btn.disabled = disabled; });
   }
 
-  function watchStream() {
+  function watchStream(reload) {
     if (!jobPanel()) return;
     var es = new EventSource("/jobs/stream");
     es.onmessage = function (ev) { appendLog(ev.data); };
@@ -34,9 +34,11 @@
       if (payload.report) {
         appendLog("--- " + JSON.stringify(payload.report) + " ---");
       }
-      // kurze Pause, damit die letzte Logzeile noch lesbar ist, bevor die
-      // Seite neu lädt und aktualisierte Zählwerte/Listen zeigt
-      setTimeout(function () { window.location.reload(); }, 1200);
+      if (reload) {
+        // kurze Pause, damit die letzte Logzeile noch lesbar ist, bevor die
+        // Seite neu lädt und aktualisierte Zählwerte/Listen zeigt
+        setTimeout(function () { window.location.reload(); }, 1200);
+      }
     });
     es.onerror = function () {
       es.close();
@@ -48,6 +50,9 @@
     qsa(".job-form").forEach(function (form) {
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
+        // z. B. die Frage-Box auf der Transkript-Seite: die Antwort landet
+        // nur im Live-Log, ein Reload würde sie sofort wieder wegwischen
+        var reload = form.dataset.reload !== "false";
         setButtonsDisabled(true);
         if (jobLog()) { jobLog().textContent = ""; }
         if (jobStatusText()) jobStatusText().textContent = "startet …";
@@ -60,7 +65,7 @@
               return;
             }
             if (jobStatusText()) jobStatusText().textContent = "läuft …";
-            watchStream();
+            watchStream(reload);
           })
           .catch(function () {
             if (jobStatusText()) jobStatusText().textContent = "Start fehlgeschlagen";
@@ -87,7 +92,10 @@
     var panel = jobPanel();
     if (!panel || panel.dataset.running !== "true") return;
     setButtonsDisabled(true);
-    watchStream();
+    // bei einem Neuladen mitten in einem Job ist nicht bekannt, welches
+    // Formular ihn gestartet hat - im Zweifel wie bisher neu laden, sobald
+    // er fertig ist
+    watchStream(true);
   }
 
   function bindToTop() {

@@ -26,20 +26,10 @@ def _truncate(text: str, max_chars: int) -> tuple[str, bool]:
     return text[:max_chars], True
 
 
-def summarize(text: str, *, cfg: SummaryCfg) -> SummaryResult:
-    """Ruft Ollamas '/api/generate' auf. Liefert bei jedem Fehler (Ollama
-    nicht erreichbar, Timeout, leere Antwort, ...) ein SummaryResult mit
-    gesetztem ``error`` statt eine Exception zu werfen - der Aufrufer legt
-    diesen Text unverändert als '*.summary.error.txt' ab."""
-    body, truncated = _truncate(text, cfg.max_input_chars)
-    if truncated:
-        log.warning(
-            "Transkript für die Zusammenfassung auf %d Zeichen gekürzt "
-            "(cfg.summary.max_input_chars) - Ergebnis kann dadurch unvollständig sein.",
-            cfg.max_input_chars,
-        )
-    prompt = cfg.prompt_template.format(text=body, max_chars=cfg.max_chars)
-
+def _generate(prompt: str, *, cfg: SummaryCfg) -> SummaryResult:
+    """Gemeinsamer Ollama-Aufruf für summarize() und ask(). Liefert bei jedem
+    Fehler (Ollama nicht erreichbar, Timeout, leere Antwort, ...) ein
+    SummaryResult mit gesetztem ``error`` statt eine Exception zu werfen."""
     try:
         resp = httpx.post(
             f"{cfg.ollama_host.rstrip('/')}/api/generate",
@@ -63,13 +53,47 @@ def summarize(text: str, *, cfg: SummaryCfg) -> SummaryResult:
     except ValueError as exc:
         return SummaryResult(text=None, error=f"Ungültige Antwort von Ollama: {exc}")
 
-    summary = (data.get("response") or "").strip()
-    if not summary:
+    answer = (data.get("response") or "").strip()
+    if not answer:
         return SummaryResult(text=None, error="Ollama lieferte eine leere Antwort")
+    return SummaryResult(text=answer)
 
-    log.info("Zusammenfassung erzeugt (%d Zeichen%s)",
-             len(summary), ", Transkript war gekürzt" if truncated else "")
-    return SummaryResult(text=summary, truncated=truncated)
+
+def summarize(text: str, *, cfg: SummaryCfg) -> SummaryResult:
+    body, truncated = _truncate(text, cfg.max_input_chars)
+    if truncated:
+        log.warning(
+            "Transkript für die Zusammenfassung auf %d Zeichen gekürzt "
+            "(cfg.summary.max_input_chars) - Ergebnis kann dadurch unvollständig sein.",
+            cfg.max_input_chars,
+        )
+    prompt = cfg.prompt_template.format(text=body, max_chars=cfg.max_chars)
+    result = _generate(prompt, cfg=cfg)
+    if result.text:
+        result.truncated = truncated
+        log.info("Zusammenfassung erzeugt (%d Zeichen%s)",
+                 len(result.text), ", Transkript war gekürzt" if truncated else "")
+    return result
+
+
+def ask(text: str, question: str, *, cfg: SummaryCfg) -> SummaryResult:
+    """Wie summarize(), aber für eine freie Frage zum Transkript statt einer
+    festen Zusammenfassung - gleicher Ollama-Aufruf, eigenes Prompt-Template
+    (cfg.ask_prompt_template)."""
+    body, truncated = _truncate(text, cfg.max_input_chars)
+    if truncated:
+        log.warning(
+            "Transkript für die Frage auf %d Zeichen gekürzt "
+            "(cfg.summary.max_input_chars) - Antwort kann dadurch unvollständig sein.",
+            cfg.max_input_chars,
+        )
+    prompt = cfg.ask_prompt_template.format(text=body, question=question)
+    result = _generate(prompt, cfg=cfg)
+    if result.text:
+        result.truncated = truncated
+        log.info("Antwort erzeugt (%d Zeichen%s)",
+                 len(result.text), ", Transkript war gekürzt" if truncated else "")
+    return result
 
 
 def list_models(cfg: SummaryCfg) -> list[str]:

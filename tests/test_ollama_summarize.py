@@ -109,3 +109,55 @@ def test_summarize_invalid_json_is_error(monkeypatch):
 
     assert result.text is None
     assert "Ungültige Antwort" in result.error
+
+
+def test_ask_success_uses_ask_prompt_template(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["json"] = json
+        return _FakeResponse({"response": "  Die Antwort lautet 42.  "})
+
+    monkeypatch.setattr(ollama_summarize.httpx, "post", fake_post)
+    cfg = SummaryCfg(ask_prompt_template="TEXT={text} FRAGE={question}")
+    result = ollama_summarize.ask("Ein Transkript.", "Wie lautet die Antwort?", cfg=cfg)
+
+    assert result.text == "Die Antwort lautet 42."
+    assert result.error is None
+    assert captured["json"]["prompt"] == "TEXT=Ein Transkript. FRAGE=Wie lautet die Antwort?"
+
+
+def test_ask_truncates_long_input(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["prompt"] = json["prompt"]
+        return _FakeResponse({"response": "ok"})
+
+    monkeypatch.setattr(ollama_summarize.httpx, "post", fake_post)
+    cfg = SummaryCfg(max_input_chars=50)
+    result = ollama_summarize.ask("x" * 500, "Frage?", cfg=cfg)
+
+    assert result.truncated is True
+    assert "x" * 500 not in captured["prompt"]
+    assert "x" * 50 in captured["prompt"]
+
+
+def test_ask_http_error_returns_error_result(monkeypatch):
+    def fake_post(url, json, timeout):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(ollama_summarize.httpx, "post", fake_post)
+    result = ollama_summarize.ask("Text", "Frage?", cfg=SummaryCfg())
+
+    assert result.text is None
+    assert "nicht erreichbar" in result.error
+
+
+def test_ask_empty_response_is_error(monkeypatch):
+    monkeypatch.setattr(ollama_summarize.httpx, "post",
+                        lambda url, json, timeout: _FakeResponse({"response": ""}))
+    result = ollama_summarize.ask("Text", "Frage?", cfg=SummaryCfg())
+
+    assert result.text is None
+    assert "leere Antwort" in result.error

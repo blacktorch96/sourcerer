@@ -6,6 +6,8 @@ import contextlib
 import shutil
 import sqlite3
 import sys
+import threading
+import webbrowser
 from pathlib import Path
 
 import typer
@@ -368,6 +370,9 @@ def web_serve(
     host: str | None = typer.Option(None, "--host", help="Bind-Adresse (Default aus config.toml)"),
     port: int | None = typer.Option(None, "--port", help="Port (Default aus config.toml)"),
     debug: bool = typer.Option(False, "--debug", help="Flask-Debugmodus"),
+    open_browser: bool | None = typer.Option(
+        None, "--open-browser/--no-open-browser",
+        help="Standardbrowser beim Start öffnen (Default aus config.toml)"),
 ) -> None:
     """Web-Oberfläche starten: Feeds verwalten, Transkripte lesen/downloaden."""
     try:
@@ -380,9 +385,22 @@ def web_serve(
     cfg = state.cfg
     _open_db(create=True).close()  # sicherstellen, dass DB/Verzeichnisse existieren
     flask_app = create_app(cfg)
+    effective_host = host or cfg.web.host
+    effective_port = port or cfg.web.port
+    effective_open_browser = cfg.web.open_browser if open_browser is None else open_browser
+
+    if effective_open_browser:
+        # 0.0.0.0/:: sind keine im Browser aufrufbaren Adressen - der Server
+        # ist dort aber trotzdem auch lokal über 127.0.0.1 erreichbar
+        browser_host = "127.0.0.1" if effective_host in ("0.0.0.0", "::") else effective_host
+        url = f"http://{browser_host}:{effective_port}/"
+        # Timer statt direktem Aufruf: flask_app.run() blockiert gleich - der
+        # Browser darf erst öffnen, nachdem der Dev-Server tatsächlich lauscht
+        threading.Timer(1.0, webbrowser.open, args=(url,)).start()
+
     # kein Reloader: die App hält Zustand (laufender Job) im Prozessspeicher,
     # ein zweiter (Reloader-)Prozess würde diesen Zustand duplizieren
-    flask_app.run(host=host or cfg.web.host, port=port or cfg.web.port,
+    flask_app.run(host=effective_host, port=effective_port,
                   debug=debug or cfg.web.debug, use_reloader=False)
 
 

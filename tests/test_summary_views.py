@@ -176,3 +176,82 @@ def test_transcripts_list_shows_summary_icon_only_when_present(client, cfg, conn
         "Kurzfassung.", encoding="utf-8")
     listing = client.get("/transcripts")
     assert b"Zusammenfassung vorhanden" in listing.data
+
+
+def test_ask_route_starts_job_with_question(app, client, cfg, conn, monkeypatch):
+    _seed_done_video(cfg, conn)
+    monkeypatch.setattr(summary_views.ollama_summarize, "ask",
+                        lambda text, question, cfg: SummaryResult(text="42."))
+    captured = {}
+    app.extensions["ytdigest_jobs"].start = (
+        lambda label, func: captured.setdefault("func", func) or True
+    )
+
+    resp = client.post("/transcripts/vid001/ask", data={"question": "Wie lautet die Antwort?"})
+    assert resp.status_code == 200
+    assert resp.get_json() == {"ok": True}
+    assert captured["func"] is not None
+
+
+def test_ask_route_rejects_empty_question(client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    resp = client.post("/transcripts/vid001/ask", data={"question": "   "})
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+
+
+def test_ask_route_404_for_unknown_video(client):
+    resp = client.post("/transcripts/does-not-exist/ask", data={"question": "Frage?"})
+    assert resp.status_code == 404
+
+
+def test_ask_route_409_when_job_running(app, client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    app.extensions["ytdigest_jobs"].start = lambda label, func: False
+    resp = client.post("/transcripts/vid001/ask", data={"question": "Frage?"})
+    assert resp.status_code == 409
+
+
+def test_ask_route_logs_question_and_answer(app, client, cfg, conn, monkeypatch, caplog):
+    _seed_done_video(cfg, conn)
+    monkeypatch.setattr(summary_views.ollama_summarize, "ask",
+                        lambda text, question, cfg: SummaryResult(text="Die Antwort."))
+    captured = {}
+    app.extensions["ytdigest_jobs"].start = (
+        lambda label, func: captured.setdefault("func", func) or True
+    )
+
+    resp = client.post("/transcripts/vid001/ask", data={"question": "Worum geht's?"})
+    assert resp.status_code == 200
+
+    with caplog.at_level("INFO", logger="ytdigest.web.summary_views"):
+        captured["func"](None)  # führt den Job synchron aus, wie es JobRunner täte
+
+    assert any("Worum geht's?" in r.message for r in caplog.records)
+    assert any("Die Antwort." in r.message for r in caplog.records)
+
+
+def test_ask_route_logs_warning_on_failure(app, client, cfg, conn, monkeypatch, caplog):
+    _seed_done_video(cfg, conn)
+    monkeypatch.setattr(
+        summary_views.ollama_summarize, "ask",
+        lambda text, question, cfg: SummaryResult(text=None, error="Ollama nicht erreichbar"),
+    )
+    captured = {}
+    app.extensions["ytdigest_jobs"].start = (
+        lambda label, func: captured.setdefault("func", func) or True
+    )
+
+    client.post("/transcripts/vid001/ask", data={"question": "Frage?"})
+    with caplog.at_level("WARNING", logger="ytdigest.web.summary_views"):
+        captured["func"](None)
+
+    assert any("Ollama nicht erreichbar" in r.message for r in caplog.records)
+
+
+def test_transcript_detail_shows_ask_form(client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    resp = client.get("/transcripts/vid001")
+    assert resp.status_code == 200
+    assert b"/transcripts/vid001/ask" in resp.data
+    assert b'data-reload="false"' in resp.data

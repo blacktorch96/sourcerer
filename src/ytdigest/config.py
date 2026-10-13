@@ -91,6 +91,7 @@ class WebCfg(BaseModel):
                               # --host anfordern
     port: int = 5050
     debug: bool = False
+    open_browser: bool = True  # Standardbrowser beim Start von 'web serve' öffnen
 
 
 class SummaryCfg(BaseModel):
@@ -119,6 +120,15 @@ class SummaryCfg(BaseModel):
         "- keine Einleitung wie 'Diese Folge behandelt...' und keine Überschrift "
         "wie 'Zusammenfassung:'\n\n"
         "Transkript:\n{text}"
+    )
+    ask_prompt_template: str = (
+        "Du bekommst das Transkript einer Podcast- oder YouTube-Folge sowie "
+        "eine Frage dazu. Beantworte die Frage auf Deutsch, ausschließlich auf "
+        "Basis des Transkripts. Lässt sie sich daraus nicht beantworten, sag "
+        "das ehrlich, statt zu raten.\n\n"
+        "Transkript:\n{text}\n\n"
+        "Frage: {question}\n\n"
+        "Antwort:"
     )
 
 
