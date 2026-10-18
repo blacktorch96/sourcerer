@@ -17,6 +17,12 @@ htmlcov/
 *.sqlite3-wal
 *.sqlite3-shm
 
+# dito je Profil (siehe profiles.py) - config.toml eines Profils bleibt
+# getrackt, seine Laufzeitdaten nicht
+profiles/*/data/
+profiles/*/logs/
+profiles/*/transkripte/
+
 # lokale Konfiguration
 /feeds.local.txt
 

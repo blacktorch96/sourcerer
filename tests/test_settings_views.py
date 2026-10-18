@@ -86,12 +86,12 @@ def test_settings_page_shows_dropdown_when_ollama_reachable(client, cfg, monkeyp
                         lambda cfg: ["qwen3.5:9b", "gpt-oss:20b"])
     resp = client.get("/settings")
     assert resp.status_code == 200
-    assert b"<select" in resp.data
+    assert b'<select id="model"' in resp.data
     assert b"gpt-oss:20b" in resp.data
 
 
 def test_settings_page_shows_textbox_when_ollama_unreachable(client, cfg):
     resp = client.get("/settings")
     assert resp.status_code == 200
-    assert b"<select" not in resp.data
+    assert b'<select id="model"' not in resp.data
     assert b"nicht erreichbar" in resp.data

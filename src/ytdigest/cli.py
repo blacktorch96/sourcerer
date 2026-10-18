@@ -22,6 +22,7 @@ from ytdigest.feeds.parser import append_line, parse_line
 from ytdigest.locking import LockHeld, lock_path_for, single_instance
 from ytdigest.logsetup import setup_logging
 from ytdigest.pipeline import INITIAL_MODES, Pipeline, RunOptions
+from ytdigest.profiles import current_profile_name, list_profiles, profile_config_path
 
 app = typer.Typer(add_completion=False,
                   help="YouTube- und Podcast-Feed-Überwachung und Transkriptbeschaffung.")
@@ -31,6 +32,8 @@ local_app = typer.Typer(help="Lokale Videodateien scannen und transkribieren.")
 app.add_typer(local_app, name="local")
 web_app = typer.Typer(help="Web-Oberfläche (Feeds verwalten, Transkripte lesen).")
 app.add_typer(web_app, name="web")
+profiles_app = typer.Typer(help="Profile (unabhängige Recherchebereiche) auflisten.")
+app.add_typer(profiles_app, name="profiles")
 console = Console()
 
 EXIT_OK = 0
@@ -53,6 +56,9 @@ state = AppState()
 @app.callback()
 def main(
     config: Path | None = typer.Option(None, "--config", help="Pfad zu config.toml"),
+    profile: str | None = typer.Option(
+        None, "--profile",
+        help="Kurzform für --config profiles/<name>/config.toml (siehe 'ytdigest profiles')"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     quiet: bool = typer.Option(False, "--quiet", "-q"),
 ) -> None:
@@ -61,6 +67,17 @@ def main(
         if reconfigure is not None:
             with contextlib.suppress(OSError, ValueError):
                 reconfigure(encoding="utf-8")  # spec 9: Konsole UTF-8 erzwingen
+
+    if profile is not None:
+        if config is not None:
+            console.print("[red]--config und --profile schließen sich aus.[/red]")
+            raise typer.Exit(EXIT_CONFIG)
+        config = profile_config_path(profile)
+        if not config.is_file():
+            available = ", ".join(list_profiles()) or "keine angelegt"
+            console.print(f"[red]Profil nicht gefunden:[/red] {config} "
+                          f"(verfügbar: {available})")
+            raise typer.Exit(EXIT_CONFIG)
 
     state.config_path = config
     state.verbose = verbose
@@ -224,6 +241,22 @@ def paths() -> None:
     table.add_row("log_file", str(cfg.paths.log_file.resolve()))
     table.add_row("temp_dir", cfg.paths.temp_dir or "(Systemtemp)")
     table.add_row("version", __version__)
+    console.print(table)
+
+
+# -------------------------------------------------------------- profiles
+@profiles_app.command("list")
+def profiles_list() -> None:
+    """Gefundene Profile (profiles/<name>/config.toml) auflisten."""
+    names = list_profiles()
+    if not names:
+        console.print("Keine Profile angelegt - siehe README, Abschnitt 'Profile'.")
+        return
+    current = current_profile_name(state.cfg)
+    table = Table("Name", "Config", "Aktiv")
+    for name in names:
+        table.add_row(name, str(profile_config_path(name).resolve()),
+                     "ja" if name == current else "")
     console.print(table)
 
 

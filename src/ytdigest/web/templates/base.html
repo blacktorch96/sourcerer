@@ -27,6 +27,20 @@
       <a href="{{ url_for('settings.index') }}"
          class="{{ 'active' if request.endpoint and request.endpoint.startswith('settings.') else '' }}">Einstellungen</a>
     </nav>
+    {% if available_profiles %}
+      <form class="profile-switch" method="post" action="{{ url_for('profiles.switch') }}">
+        <select name="profile" onchange="this.form.submit()" title="Profil wechseln">
+          {% if not current_profile_name %}
+            <option value="" selected disabled>Standard</option>
+          {% endif %}
+          {% for name in available_profiles %}
+            <option value="{{ name }}" {{ 'selected' if name == current_profile_name else '' }}>
+              {{ name }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+    {% endif %}
   </header>
 
   <main>

@@ -111,6 +111,9 @@ body {
 .topbar nav a:hover { color: var(--fg); background: var(--neutral-soft); }
 .topbar nav a.active { color: var(--accent); background: var(--accent-soft); }
 
+.profile-switch { margin-left: auto; }
+.profile-switch select { font-size: 0.9em; padding: 5px 8px; }
+
 main { max-width: 1040px; margin: 0 auto; padding: 28px 24px 80px; }
 
 a { color: var(--accent); }

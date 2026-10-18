@@ -8,6 +8,8 @@ from pathlib import Path
 from flask import Flask
 
 from ytdigest.config import Config
+from ytdigest.profiles import current_profile_name, list_profiles
+from ytdigest.web.context import get_cfg
 from ytdigest.web.jobs import JobRunner
 
 
@@ -38,9 +40,18 @@ def create_app(cfg: Config) -> Flask:
 
     app.jinja_env.globals["asset_url"] = asset_url
 
+    @app.context_processor
+    def inject_profiles():
+        # überall in der Nav verfügbar, ohne dass jede View es durchreichen muss
+        return {
+            "available_profiles": list_profiles(),
+            "current_profile_name": current_profile_name(get_cfg()),
+        }
+
     from ytdigest.web.dashboard_views import bp as dashboard_bp
     from ytdigest.web.feeds_views import bp as feeds_bp
     from ytdigest.web.jobs_views import bp as jobs_bp
+    from ytdigest.web.profiles_views import bp as profiles_bp
     from ytdigest.web.settings_views import bp as settings_bp
     from ytdigest.web.summary_views import bp as summary_bp  # experimentell, siehe dortige Moduldoc
     from ytdigest.web.transcripts_views import bp as transcripts_bp
@@ -51,4 +62,5 @@ def create_app(cfg: Config) -> Flask:
     app.register_blueprint(jobs_bp)
     app.register_blueprint(summary_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(profiles_bp)
     return app

@@ -1,0 +1,58 @@
+# Profil "technologie": zeigt bewusst auf die bereits bestehenden Daten im
+# Projekt-Wurzelverzeichnis (nicht auf profiles/technologie/...) - die
+# bisherigen Feeds/Transkripte wurden beim Einführen von Profilen nicht
+# verschoben. Pfade sind relativ zum Arbeitsverzeichnis beim Aufruf von
+# 'ytdigest', nicht relativ zu dieser Datei - 'ytdigest' also immer aus dem
+# Projekt-Wurzelverzeichnis heraus starten (wie bisher auch).
+[paths]
+feeds_file   = "feeds.txt"
+database     = "data/ytdigest.sqlite3"
+output_dir   = "transkripte"
+temp_dir     = ""            # leer = Systemtemp
+log_file     = "logs/ytdigest.log"
+
+[feeds]
+request_timeout_s   = 15
+delay_between_s     = 2.0    # Höflichkeitspause zwischen Feed-Abrufen
+use_conditional_get = true   # ETag / If-Modified-Since
+
+[transcripts]
+prefer_original   = true           # immer Originalsprache des Videos, nie Auto-Übersetzung
+languages         = ["en", "de"]   # nur Fallback, falls Originalsprache unbestimmbar
+prefer_manual     = true           # manuelle vor Auto-Captions
+max_attempts      = 3
+retry_backoff_s   = [60, 300, 1800]
+paragraph_pause_s = 1.8            # Sprechpause zwischen Cues ab der ein neuer Absatz beginnt, 0 = aus
+chapter_headings  = true           # YouTube-Kapitel (falls vorhanden) als Überschriften einfügen
+
+[filters]
+min_duration_min = 8              # kürzere Videos überspringen (Shorts, Clips)
+
+[asr]
+enabled           = true
+model             = "large-v3"
+device            = "cuda"        # "cuda" | "cpu" | "auto"
+compute_type      = "float16"
+beam_size         = 5
+max_duration_min  = 240            # längere Videos nicht per ASR verarbeiten
+paragraph_pause_s = 1.8           # Sprechpause ab der ein neuer Absatz beginnt, 0 = aus
+
+[output]
+include_video_id  = false   # true = Video-ID immer an den Dateinamen hängen
+max_filename_len  = 120
+timestamp_source  = "published_utc"
+line_width        = 120     # Zeilenumbruch im Transkript-Text, 0 = kein Umbruch
+
+[local]
+extensions = ["mp4", "mkv", "webm", "mov", "avi", "m4v"]  # per "ytdigest local scan" berücksichtigte Endungen
+min_age_s  = 30    # Datei muss so lange unverändert sein (wartet laufende Kopiervorgänge ab)
+
+[gdrive]
+enabled              = false                       # true = Transkripte zusätzlich nach Google Drive hochladen
+service_account_file = "service_account.json"       # Key-Datei eines Google-Cloud-Service-Accounts
+folder_id            = ""                           # ID des Drive-Zielordners (mit der Service-Account-E-Mail teilen!)
+mirror_subdirs       = true                         # je Kanal einen Unterordner wie lokal (dir_slug) anlegen
+upload_sidecar       = true                         # auch die .json-Metadatei mit hochladen
+
+[summary]
+model = "gpt-oss:20b"

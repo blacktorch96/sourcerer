@@ -148,6 +148,31 @@ mit "Erneut versuchen"-Button angezeigt, bis ein Versuch klappt).
 ollama pull qwen3.5:9b     # oder ein anderes lokal installiertes Modell
 ```
 
+## Profile
+
+Mehrere unabhängige Recherchebereiche (eigene Feeds, Datenbank, Transkripte,
+ASR-/Zusammenfassungs-Einstellungen) nebeneinander, z. B. "technologie" und
+"studium". Ein Profil ist einfach eine weitere vollständige `config.toml`
+unter `profiles/<name>/config.toml` - Pipeline und Web-Oberfläche kennen
+keinen eigenen Profil-Begriff, sie bekommen nur jeweils "die aktuelle Config"
+gereicht.
+
+```bash
+uv run ytdigest profiles list                  # gefundene Profile anzeigen
+uv run ytdigest --profile studium run           # Kurzform für --config profiles/studium/config.toml
+uv run ytdigest --profile studium web serve     # eigene Web-Oberfläche für dieses Profil
+```
+
+Ohne `--profile`/`--config` verhält sich das Tool unverändert wie bisher
+(normale `./config.toml`-Auflösung). In der Web-Oberfläche erscheint oben
+rechts ein Dropdown, sobald mindestens ein Profil existiert - ein Wechsel
+dort ändert Dashboard/Feeds/Transkripte sofort auf das gewählte Profil, ohne
+Serverneustart (nicht möglich, während gerade ein Job läuft).
+
+Ein neues Profil anlegen: Ordner `profiles/<name>/` mit eigener `config.toml`
+(`[paths]` auf `profiles/<name>/...` zeigen lassen) erstellen, dann einmalig
+`ytdigest --profile <name> init`.
+
 ## Formatierung einzeiliger Transkripte
 
 ASR (faster-whisper) und manche Caption-Spuren mit sehr langen Cues liefern den

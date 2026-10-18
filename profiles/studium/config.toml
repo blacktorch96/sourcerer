@@ -1,0 +1,14 @@
+# Profil "studium": eigene Feeds/Datenbank/Transkripte unter profiles/studium/,
+# unabhängig vom Profil "technologie". Pfade sind relativ zum
+# Arbeitsverzeichnis beim Aufruf von 'ytdigest' (Projekt-Wurzelverzeichnis),
+# nicht relativ zu dieser Datei.
+[paths]
+feeds_file = "profiles/studium/feeds.txt"
+database   = "profiles/studium/data/ytdigest.sqlite3"
+output_dir = "profiles/studium/transkripte"
+temp_dir   = ""
+log_file   = "profiles/studium/logs/ytdigest.log"
+
+# Rest bewusst auf Default belassen - bei Bedarf eigene Werte ergänzen, z. B.
+# einen anderen Dauerfilter für Vorlesungsaufzeichnungen oder einen eigenen
+# Zusammenfassungs-Prompt unter [summary].
