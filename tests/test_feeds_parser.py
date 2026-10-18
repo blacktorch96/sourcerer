@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from ytdigest.feeds.parser import parse_feeds_file, parse_line
@@ -51,6 +53,26 @@ def test_podcast_prefix_case_insensitive_and_needs_url():
     assert parsed.podcast_url == "https://example.com/feed.rss"
     with pytest.raises(ValueError):
         parse_line("podcast:")
+
+
+def test_local_prefix_parsed_posix_path():
+    parsed = parse_line("local:/home/me/aufnahmen | Meine Aufnahmen")
+    assert parsed.local_dir == Path("/home/me/aufnahmen")
+    assert parsed.display_name == "Meine Aufnahmen"
+    assert parsed.channel_id is None
+    assert parsed.handle is None
+
+
+def test_local_prefix_parsed_windows_path():
+    parsed = parse_line(r"local:C:\Users\me\Aufnahmen")
+    assert parsed.local_dir == Path("C:/Users/me/Aufnahmen")
+
+
+def test_local_prefix_case_insensitive_and_needs_path():
+    parsed = parse_line("LOCAL:/tmp/aufnahmen")
+    assert parsed.local_dir == Path("/tmp/aufnahmen")
+    with pytest.raises(ValueError):
+        parse_line("local:")
 
 
 def test_file_dedupes(tmp_path):

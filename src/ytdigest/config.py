@@ -72,7 +72,7 @@ class OutputCfg(BaseModel):
 
 
 class LocalCfg(BaseModel):
-    extensions: list[str] = ["mp4", "mkv", "webm", "mov", "avi", "m4v"]
+    extensions: list[str] = ["mp4", "mkv", "webm", "mov", "avi", "m4v", "mp3", "wav", "m4a"]
     min_age_s: int = 30   # Datei muss seit mind. so vielen Sekunden unverändert sein
                           # (wartet einen laufenden Kopiervorgang ab)
 

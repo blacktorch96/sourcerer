@@ -63,12 +63,35 @@ liegen direkt darin (eine Ebene, keine weitere Verschachtelung).
   nachdem das Transkript geschrieben und in der Datenbank als `done` vermerkt
   ist - nie vor gesichertem Erfolg, nie automatisch.
 - Berücksichtigte Endungen: `local.extensions` in `config.toml` (Default
-  `mp4, mkv, webm, mov, avi, m4v`).
+  `mp4, mkv, webm, mov, avi, m4v, mp3, wav, m4a`).
 
 Läuft über dieselbe Datenbank/Zustandsmaschine wie der Feed-Pfad - `status`,
 `retry` und `feeds list` funktionieren also auch für lokale Kanäle.
 `local scan` verarbeitet dabei ausschließlich die unter `<verzeichnis>`
 gefundenen Kanäle, nie anderweitig offen liegende Feed-Videos.
+
+### Einzelner Ordner als Feed (`local:` in feeds.txt)
+
+Für einen einzelnen Ordner (keine Kanal-Unterordner, Dateien liegen direkt
+darin) reicht ein Eintrag in `feeds.txt` - er wird dann bei jedem normalen
+`run`/Sync mitberücksichtigt, ohne extra `local scan`:
+
+```
+local:/home/me/aufnahmen | Meine Aufnahmen
+local:C:\Users\me\Aufnahmen
+```
+
+- Funktioniert mit Windows- (`C:\...`) und Linux/macOS-Pfaden (`/...`),
+  unabhängig vom Betriebssystem, auf dem `feeds.txt` gerade gelesen wird -
+  praktisch für eine über mehrere Geräte synchronisierte `feeds.txt`
+  (ein Pfad, der auf dem aktuellen Gerät nicht existiert, wird beim Sync
+  einfach übersprungen, siehe `feeds_failed`).
+- **Vorhandenes Transkript übernehmen:** liegt neben einer Mediendatei
+  bereits eine gleichnamige `.txt` (z. B. `episode1.mp3` + `episode1.txt`),
+  wird deren Inhalt direkt als Transkript übernommen - kein ASR-Lauf, keine
+  Dauer-Filterung. Fehlt die `.txt`, läuft die Datei wie gewohnt über ASR.
+- Entfällt die `local:`-Zeile aus `feeds.txt`, wird der Feed wie jeder
+  andere auch deaktiviert (`is_active = 0`), nicht gelöscht.
 
 ## Podcasts
 

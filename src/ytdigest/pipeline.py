@@ -172,21 +172,57 @@ class Pipeline:
                 )
                 log.info("Neuer lokaler Kanal: %s -> %s", channel_id, slug)
             report.feeds_checked += 1
+            report.new_videos += self._scan_local_files(channel_dir, channel_id, feed, cfg_local)
 
-            for path in local.iter_video_files(channel_dir, cfg_local.extensions):
-                video_id = f"{channel_id}/{path.name}"
-                if self.repo.video_exists(video_id):
-                    continue
-                if not local.is_settled(path, min_age_s=cfg_local.min_age_s):
-                    log.debug("Noch zu frisch, überspringe vorerst: %s", path)
-                    continue
-                entry = FeedEntry(
-                    video_id=video_id, title=path.stem,
-                    published_at=local.creation_time(path),
-                    url=str(path.resolve()),
-                )
-                self.repo.add_video(entry, feed.id, status="discovered")
-                report.new_videos += 1
+    def _sync_local_dir_line(self, line: ParsedFeedLine, report: RunReport,
+                             used_slugs: set[str]) -> str | None:
+        """Pendant zu ``local_sync`` für eine einzelne ``local:<pfad>``-Zeile
+        aus feeds.txt: der angegebene Ordner selbst ist der Feed/Kanal, keine
+        Kanal-Unterordner darin. Gibt die ``channel_id`` zurück, damit der
+        Aufrufer sie in ``keep`` eintragen kann - oder None, wenn der Ordner
+        (z. B. auf diesem Gerät/Betriebssystem) nicht existiert."""
+        channel_dir = line.local_dir
+        if not channel_dir.is_dir():
+            log.warning("Lokaler Feed-Ordner nicht gefunden: %s", channel_dir)
+            report.feeds_failed += 1
+            return None
+
+        channel_id = channel_dir.name
+        feed = self.repo.get_feed_by_channel_id(channel_id)
+        if feed is None:
+            slug = self._unique_slug(line.display_name or channel_id, used_slugs)
+            used_slugs.add(slug)
+            feed = self.repo.create_feed(
+                channel_id=channel_id, feed_url=local.feed_url_for(channel_dir),
+                dir_slug=slug, channel_title=channel_id, display_name=line.display_name,
+                resolved_from="local",
+            )
+            log.info("Neuer lokaler Ordner-Feed: %s -> %s", channel_dir, slug)
+        elif not feed.is_active:
+            self.repo.reactivate_feed(feed.id, display_name=line.display_name)
+
+        report.feeds_checked += 1
+        report.new_videos += self._scan_local_files(channel_dir, channel_id, feed, self.cfg.local)
+        return channel_id
+
+    def _scan_local_files(self, channel_dir: Path, channel_id: str, feed: Feed,
+                          cfg_local) -> int:
+        added = 0
+        for path in local.iter_video_files(channel_dir, cfg_local.extensions):
+            video_id = f"{channel_id}/{path.name}"
+            if self.repo.video_exists(video_id):
+                continue
+            if not local.is_settled(path, min_age_s=cfg_local.min_age_s):
+                log.debug("Noch zu frisch, überspringe vorerst: %s", path)
+                continue
+            entry = FeedEntry(
+                video_id=video_id, title=path.stem,
+                published_at=local.creation_time(path),
+                url=str(path.resolve()),
+            )
+            self.repo.add_video(entry, feed.id, status="discovered")
+            added += 1
+        return added
 
     # ----------------------------------------------------------------- sync
     def sync(self, opts: RunOptions, report: RunReport) -> None:
@@ -196,6 +232,11 @@ class Pipeline:
         timeout = self.cfg.feeds.request_timeout_s
 
         for line in parsed:
+            if line.local_dir:
+                channel_id = self._sync_local_dir_line(line, report, used_slugs)
+                if channel_id:
+                    keep.add(channel_id)
+                continue
             try:
                 if line.podcast_url:
                     channel_id = podcast.channel_id_for(line.podcast_url)
@@ -437,15 +478,21 @@ class Pipeline:
             self.repo.set_duration(video.video_id, meta.duration_s)
             current.duration_s = meta.duration_s
 
+        result = None
+        if is_local and not opts.asr_only:
+            # bereits vorhandene gleichnamige .txt übernehmen, bevor die
+            # Dauer-Filterung oder ASR überhaupt greift - siehe local.py
+            result = local.read_existing_transcript(Path(video.url))
+
         min_seconds = self._min_duration_seconds(opts)
-        if not opts.asr_only and meta.duration_s is not None and meta.duration_s < min_seconds:
+        if (result is None and not opts.asr_only
+                and meta.duration_s is not None and meta.duration_s < min_seconds):
             self.repo.skip_video(video.video_id, "too_short", duration_s=meta.duration_s)
             report.skipped += 1
             log.info("Übersprungen (zu kurz, %ds): %s", meta.duration_s, video.title)
             return
 
-        result = None
-        if not opts.asr_only and not is_local and not is_podcast:
+        if result is None and not opts.asr_only and not is_local and not is_podcast:
             result = captions.fetch_captions(
                 meta, self.cfg.transcripts.languages,
                 prefer_manual=self.cfg.transcripts.prefer_manual,

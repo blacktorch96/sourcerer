@@ -2,8 +2,14 @@
 
 Layout-Annahme (siehe README): unter einem Wurzelverzeichnis liegt je
 Unterordner ein "Kanal" (Ordnername = channel_id/dir_slug), Videodateien
-direkt darin. Kein Caption-/Untertitel-Support - lokale Videos laufen immer
-über ASR (siehe asr.py, ``transcribe_local``).
+direkt darin. Alternativ kann ein einzelner Ordner per ``local:<pfad>`` in
+feeds.txt direkt als Feed eingetragen werden (siehe ``feeds/parser.py``,
+``pipeline.sync``) - dort liegen die Dateien ohne Kanal-Unterordner direkt
+im angegebenen Verzeichnis.
+
+Standardmäßig läuft jede gefundene Datei über ASR (siehe asr.py,
+``transcribe_local``) - außer es liegt bereits eine gleichnamige ``.txt``
+daneben (siehe ``read_existing_transcript``), dann wird die übernommen.
 """
 
 from __future__ import annotations
@@ -16,7 +22,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ytdigest.models import VideoProbe
+from ytdigest.models import TranscriptResult, VideoProbe
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +38,44 @@ def feed_url_for(channel_dir: Path) -> str:
 
 def is_local_feed(feed_url: str) -> bool:
     return feed_url.startswith(LOCAL_FEED_PREFIX)
+
+
+def parse_local_path(raw: str) -> Path:
+    """Pfad aus einer ``local:``-Zeile in feeds.txt - akzeptiert sowohl
+    Windows- (``C:\\Users\\...``) als auch Linux/macOS-Pfade (``/home/...``),
+    unabhängig vom Betriebssystem, auf dem feeds.txt gerade geparst wird.
+    Ob der Pfad auf diesem Rechner tatsächlich existiert, prüft erst der
+    Scan - ein Windows-Pfad in einer über mehrere Geräte synchronisierten
+    feeds.txt ist z. B. unter macOS schlicht nicht vorhanden und wird dort
+    übersprungen (siehe ``pipeline.sync``)."""
+    text = raw.strip()
+    if "\\" in text:
+        text = text.replace("\\", "/")
+    return Path(text)
+
+
+def existing_transcript_path(media_path: Path) -> Path | None:
+    """Pfad zu einer bereits vorhandenen ``.txt`` neben ``media_path`` (gleicher
+    Dateiname ohne Endung) - z. B. von Hand erstellte oder aus einer anderen
+    Quelle übernommene Transkripte. Wird eine gefunden, läuft die Datei nie
+    durch ASR."""
+    candidate = media_path.with_suffix(".txt")
+    return candidate if candidate.is_file() else None
+
+
+def read_existing_transcript(media_path: Path) -> TranscriptResult | None:
+    txt_path = existing_transcript_path(media_path)
+    if txt_path is None:
+        return None
+    try:
+        text = txt_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        log.warning("Vorhandene Transkript-Datei nicht lesbar (%s): %s", txt_path, exc)
+        return None
+    if not text:
+        return None
+    log.info("Vorhandenes Transkript übernommen: %s", txt_path)
+    return TranscriptResult(text=text, source="local_txt", language="")
 
 
 def iter_channel_dirs(root: Path) -> Iterator[Path]:

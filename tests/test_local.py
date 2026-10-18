@@ -111,3 +111,48 @@ def test_iter_video_files_accepts_dot_or_bare_extension(tmp_path, bad_extension)
     _touch(tmp_path / "a.mp4")
     names = [p.name for p in local.iter_video_files(tmp_path, [bad_extension])]
     assert names == ["a.mp4"]
+
+
+def test_parse_local_path_posix():
+    assert local.parse_local_path("/home/me/aufnahmen") == Path("/home/me/aufnahmen")
+
+
+def test_parse_local_path_windows_backslash_normalised():
+    assert local.parse_local_path(r"C:\Users\me\Aufnahmen") == Path("C:/Users/me/Aufnahmen")
+
+
+def test_parse_local_path_strips_whitespace():
+    assert local.parse_local_path("  /tmp/x  ") == Path("/tmp/x")
+
+
+def test_existing_transcript_path_missing(tmp_path):
+    media = _touch(tmp_path / "clip.mp3")
+    assert local.existing_transcript_path(media) is None
+
+
+def test_existing_transcript_path_found(tmp_path):
+    media = _touch(tmp_path / "clip.mp3")
+    txt = tmp_path / "clip.txt"
+    txt.write_text("hallo welt", encoding="utf-8")
+    assert local.existing_transcript_path(media) == txt
+
+
+def test_read_existing_transcript_adopts_text(tmp_path):
+    media = _touch(tmp_path / "clip.wav")
+    (tmp_path / "clip.txt").write_text("  bereits transkribierter text  \n",
+                                       encoding="utf-8")
+    result = local.read_existing_transcript(media)
+    assert result is not None
+    assert result.text == "bereits transkribierter text"
+    assert result.source == "local_txt"
+
+
+def test_read_existing_transcript_none_without_sidecar(tmp_path):
+    media = _touch(tmp_path / "clip.wav")
+    assert local.read_existing_transcript(media) is None
+
+
+def test_read_existing_transcript_none_for_empty_sidecar(tmp_path):
+    media = _touch(tmp_path / "clip.wav")
+    (tmp_path / "clip.txt").write_text("   ", encoding="utf-8")
+    assert local.read_existing_transcript(media) is None

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 
 
 @dataclass(slots=True)
@@ -15,6 +16,7 @@ class ParsedFeedLine:
     feed_url: str | None = None         # gesetzt, wenn direkt bekannt
     handle: str | None = None           # '@name' oder Kanal-URL, muss aufgelöst werden
     podcast_url: str | None = None      # 'podcast:<url>'-Zeile: normale Podcast-RSS
+    local_dir: Path | None = None       # 'local:<pfad>'-Zeile: ein Ordner direkt als Feed
     display_name: str | None = None     # Override für den Verzeichnisnamen
 
 
@@ -89,7 +91,7 @@ class VideoProbe:
 @dataclass(slots=True)
 class TranscriptResult:
     text: str
-    source: str                         # captions_manual | captions_auto | asr
+    source: str                         # captions_manual | captions_auto | asr | local_txt
     language: str
     asr_model: str | None = None
 

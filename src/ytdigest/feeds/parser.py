@@ -6,12 +6,14 @@ import re
 from pathlib import Path
 
 from ytdigest.models import ParsedFeedLine
+from ytdigest.sources import local
 
 CHANNEL_ID_RE = re.compile(r"^UC[0-9A-Za-z_-]{22}$")
 _VIDEOS_XML_RE = re.compile(r"youtube\.com/feeds/videos\.xml", re.IGNORECASE)
 _CHANNEL_ID_IN_URL = re.compile(r"[?&]channel_id=(UC[0-9A-Za-z_-]{22})")
 _HANDLE_RE = re.compile(r"^@[\w.-]+$")
 _PODCAST_PREFIX_RE = re.compile(r"^podcast:\s*", re.IGNORECASE)
+_LOCAL_PREFIX_RE = re.compile(r"^local:\s*", re.IGNORECASE)
 
 
 def feed_url_for_channel(channel_id: str) -> str:
@@ -35,6 +37,13 @@ def parse_line(raw: str) -> ParsedFeedLine | None:
         if not url:
             raise ValueError(f"Podcast-Zeile ohne URL: {raw!r}")
         return ParsedFeedLine(raw=raw, podcast_url=url, display_name=display_name)
+
+    if _LOCAL_PREFIX_RE.match(line):
+        path_str = _LOCAL_PREFIX_RE.sub("", line, count=1).strip()
+        if not path_str:
+            raise ValueError(f"local:-Zeile ohne Pfad: {raw!r}")
+        return ParsedFeedLine(raw=raw, local_dir=local.parse_local_path(path_str),
+                              display_name=display_name)
 
     if _VIDEOS_XML_RE.search(line):
         match = _CHANNEL_ID_IN_URL.search(line)
@@ -80,6 +89,8 @@ def _line_matches_feed(parsed: ParsedFeedLine, feed) -> bool:
     """``feed.resolved_from`` ist der einmal aufgelöste Ursprungstoken (z. B.
     '@handle') - nur darüber lässt sich eine Handle-Zeile eindeutig einem
     bereits bekannten Feed zuordnen, da die Zeile selbst keine Kanal-ID trägt."""
+    if parsed.local_dir:
+        return feed.feed_url == local.feed_url_for(parsed.local_dir)
     if feed.resolved_from:
         return parsed.handle == feed.resolved_from
     if parsed.podcast_url:
@@ -120,7 +131,9 @@ def parse_feeds_file(path: Path) -> list[ParsedFeedLine]:
         if parsed is None:
             continue
         key = (parsed.feed_url or parsed.channel_id or parsed.handle
-               or parsed.podcast_url or parsed.raw)
+               or parsed.podcast_url
+               or (str(parsed.local_dir) if parsed.local_dir else None)
+               or parsed.raw)
         if key in seen:
             continue
         seen.add(key)
