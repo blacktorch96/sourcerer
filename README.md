@@ -123,6 +123,62 @@ uv run ytdigest feeds add "podcast:https://rss.buzzsprout.com/2402174.rss" --nam
   `status`, `retry`, `feeds list` und `run --feed <id>` funktionieren also
   auch für Podcast-Kanäle.
 
+## Verteilter Betrieb
+
+Web-Oberfläche/Datenbank können auf einem anderen Gerät laufen als ASR/Ollama -
+z. B. die Web-Oberfläche dauerhaft auf einem Raspberry Pi, ASR und Ollama nur
+bei Bedarf auf einem GPU-Hauptrechner im selben Netz.
+
+**ASR-Worker (auf dem GPU-Rechner):**
+
+```bash
+uv sync --extra asr --extra web
+uv run ytdigest asr-worker serve --host 0.0.0.0 --port 8765
+```
+
+```toml
+[asr_worker]
+host = "0.0.0.0"
+port = 8765
+allowed_roots = ["~/Dokumente/sourcerer/*"]  # Glob-Muster; jede aktuell
+                                              # existierende Unterordner-Ebene
+                                              # darunter wird automatisch (lesend)
+                                              # freigegeben, ohne Neustart
+```
+
+**Pi (Web-Oberfläche + Datenbank):**
+
+```toml
+[asr]
+remote_url = "http://<ip-des-hauptrechners>:8765"
+
+[summary]
+ollama_host = "http://<ip-des-hauptrechners>:11434"  # OLLAMA_HOST=0.0.0.0 auf dem Hauptrechner
+```
+
+Damit laufen YouTube-/Podcast-ASR und Ollama-Zusammenfassungen transparent
+über den Worker - der Pi selbst braucht kein `--extra asr` und kein GPU.
+
+**Ordner-Feeds ohne Samba/NFS:** ein unter `asr_worker.allowed_roots`
+freigegebener Unterordner lässt sich direkt als Feed eintragen:
+
+```
+local:http://<ip-des-hauptrechners>:8765/folders/fom_s4 | FOM S4
+```
+
+Der Pi scannt/transkribiert diesen Ordner ausschließlich über den Worker
+(Dateiliste, Dauer-Probe, vorhandene `.txt`-Übernahme, ASR) - nie direkt im
+Dateisystem. Ist der Hauptrechner gerade aus, wird der Feed für diesen Sync
+als fehlgeschlagen markiert und beim nächsten Mal erneut versucht; bereits
+begonnene Transkriptionen landen als `failed` mit Retry (kein automatisches
+Nachholen in kurzen Abständen - `ytdigest retry` bzw. der Retry-Button in der
+Web-Oberfläche, sobald der Hauptrechner wieder läuft).
+
+**Sicherheitshinweis:** weder der ASR-Worker noch Ollama haben eine
+Zugangskontrolle (passend zum Grundsatz "kein Login, nur explizit angeforderter
+Netzwerkzugriff" - siehe `web.host`). Beide nur im eigenen LAN erreichbar
+machen, nie per Portweiterleitung ins Internet legen.
+
 ## Web-Oberfläche
 
 ```bash

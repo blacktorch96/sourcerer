@@ -64,7 +64,13 @@ def _download_audio(url: str, workdir: Path) -> Path:
 
 def transcribe(url: str, *, cfg: AsrCfg, temp_dir: str | None) -> TranscriptResult | None:
     """Episode laden und wie eine lokale Datei per faster-whisper
-    transkribieren (``asr.transcribe_local`` demuxt selbst per ffmpeg)."""
+    transkribieren (``asr.transcribe_local`` demuxt selbst per ffmpeg).
+
+    Bei ``cfg.remote_url`` lädt stattdessen der Worker die Episode selbst
+    herunter (gleicher Endpunkt wie für YouTube, nur ``kind='podcast'``) -
+    kein Datei-Transfer zwischen diesem Rechner und dem Worker nötig."""
+    if cfg.remote_url:
+        return asr._remote_transcribe(url, kind="podcast", cfg=cfg)
     asr._require_faster_whisper()  # vor dem Download prüfen, nicht erst danach
     workdir = Path(tempfile.mkdtemp(prefix="ytdigest_podcast_", dir=temp_dir or None))
     try:

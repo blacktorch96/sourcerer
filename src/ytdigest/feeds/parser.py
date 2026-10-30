@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from ytdigest.models import ParsedFeedLine
-from ytdigest.sources import local
+from ytdigest.sources import local, local_remote
 
 CHANNEL_ID_RE = re.compile(r"^UC[0-9A-Za-z_-]{22}$")
 _VIDEOS_XML_RE = re.compile(r"youtube\.com/feeds/videos\.xml", re.IGNORECASE)
@@ -42,6 +42,9 @@ def parse_line(raw: str) -> ParsedFeedLine | None:
         path_str = _LOCAL_PREFIX_RE.sub("", line, count=1).strip()
         if not path_str:
             raise ValueError(f"local:-Zeile ohne Pfad: {raw!r}")
+        if path_str.startswith(("http://", "https://")):
+            return ParsedFeedLine(raw=raw, local_remote_url=path_str.rstrip("/"),
+                                  display_name=display_name)
         return ParsedFeedLine(raw=raw, local_dir=local.parse_local_path(path_str),
                               display_name=display_name)
 
@@ -91,6 +94,8 @@ def _line_matches_feed(parsed: ParsedFeedLine, feed) -> bool:
     bereits bekannten Feed zuordnen, da die Zeile selbst keine Kanal-ID trägt."""
     if parsed.local_dir:
         return feed.feed_url == local.feed_url_for(parsed.local_dir)
+    if parsed.local_remote_url:
+        return feed.feed_url == local_remote.feed_url_for(parsed.local_remote_url)
     if feed.resolved_from:
         return parsed.handle == feed.resolved_from
     if parsed.podcast_url:
@@ -133,6 +138,7 @@ def parse_feeds_file(path: Path) -> list[ParsedFeedLine]:
         key = (parsed.feed_url or parsed.channel_id or parsed.handle
                or parsed.podcast_url
                or (str(parsed.local_dir) if parsed.local_dir else None)
+               or parsed.local_remote_url
                or parsed.raw)
         if key in seen:
             continue

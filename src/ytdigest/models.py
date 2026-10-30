@@ -17,6 +17,8 @@ class ParsedFeedLine:
     handle: str | None = None           # '@name' oder Kanal-URL, muss aufgelöst werden
     podcast_url: str | None = None      # 'podcast:<url>'-Zeile: normale Podcast-RSS
     local_dir: Path | None = None       # 'local:<pfad>'-Zeile: ein Ordner direkt als Feed
+    local_remote_url: str | None = None  # 'local:<http(s)-url>'-Zeile: Ordner über den
+                                          # ASR-Worker (siehe sources/local_remote.py)
     display_name: str | None = None     # Override für den Verzeichnisnamen
 
 

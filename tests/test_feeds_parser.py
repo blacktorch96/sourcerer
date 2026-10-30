@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from ytdigest.feeds.parser import parse_feeds_file, parse_line
+from ytdigest.feeds.parser import parse_feeds_file, parse_line, remove_line
+from ytdigest.sources import local_remote
 
 
 def test_comments_and_blank_lines_ignored():
@@ -73,6 +74,39 @@ def test_local_prefix_case_insensitive_and_needs_path():
     assert parsed.local_dir == Path("/tmp/aufnahmen")
     with pytest.raises(ValueError):
         parse_line("local:")
+
+
+def test_local_prefix_with_http_url_is_remote():
+    parsed = parse_line("local:http://192.168.1.50:8765/folders/fom_s4 | FOM S4")
+    assert parsed.local_remote_url == "http://192.168.1.50:8765/folders/fom_s4"
+    assert parsed.local_dir is None
+    assert parsed.display_name == "FOM S4"
+
+
+def test_local_prefix_with_https_url_is_remote():
+    parsed = parse_line("local:https://pc.local:8765/folders/fom_s4")
+    assert parsed.local_remote_url == "https://pc.local:8765/folders/fom_s4"
+
+
+def test_local_prefix_remote_url_trailing_slash_stripped():
+    parsed = parse_line("local:http://pc.local:8765/folders/fom_s4/")
+    assert parsed.local_remote_url == "http://pc.local:8765/folders/fom_s4"
+
+
+def test_remove_line_removes_matching_remote_local_feed(tmp_path):
+    from ytdigest.models import Feed
+
+    folder_url = "http://192.168.1.50:8765/folders/fom_s4"
+    f = tmp_path / "feeds.txt"
+    f.write_text(f"local:{folder_url} | FOM S4\n@other\n", encoding="utf-8")
+    feed = Feed(id=1, channel_id="fom_s4", feed_url=local_remote.feed_url_for(folder_url),
+               dir_slug="fom_s4")
+
+    removed = remove_line(f, feed)
+
+    assert removed is True
+    assert "local:" not in f.read_text(encoding="utf-8")
+    assert "@other" in f.read_text(encoding="utf-8")
 
 
 def test_file_dedupes(tmp_path):

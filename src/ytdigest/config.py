@@ -49,6 +49,10 @@ class FiltersCfg(BaseModel):
 
 class AsrCfg(BaseModel):
     enabled: bool = True
+    remote_url: str = ""   # gesetzt -> ASR läuft über den Worker auf dieser URL
+                            # (siehe asr_worker.py) statt lokal per faster-whisper -
+                            # für den YouTube-/Podcast-Pfad (sources/asr.py, sources/podcast.py)
+    remote_timeout_s: float = 1800.0  # ASR kann bei langen Folgen lange dauern
     model: str = "large-v3"
     device: str = "cuda"
     compute_type: str = "float16"
@@ -75,6 +79,22 @@ class LocalCfg(BaseModel):
     extensions: list[str] = ["mp4", "mkv", "webm", "mov", "avi", "m4v", "mp3", "wav", "m4a"]
     min_age_s: int = 30   # Datei muss seit mind. so vielen Sekunden unverändert sein
                           # (wartet einen laufenden Kopiervorgang ab)
+
+
+class AsrWorkerCfg(BaseModel):
+    """EXPERIMENTELL/eigenständig - siehe asr_worker.py. Nur relevant auf dem
+    Rechner, der ``ytdigest asr-worker serve`` betreibt (dem GPU-Hauptrechner),
+    nicht auf dem Gerät, das die Web-Oberfläche hostet. Lässt sich bei Bedarf
+    komplett entfernen, ohne andere Config-Abschnitte anzufassen - betroffen
+    wären nur: diese Klasse, asr_worker.py, der 'asr-worker'-Befehl in cli.py,
+    AsrCfg.remote_url/remote_timeout_s und sources/local_remote.py."""
+
+    host: str = "127.0.0.1"
+    port: int = 8765
+    allowed_roots: list[str] = []  # Glob-Muster, z. B. "~/Dokumente/sourcerer/*" -
+                                    # jede aktuell existierende Unterordner-Ebene, die
+                                    # darauf passt, wird automatisch freigegeben (lesend),
+                                    # neu ausgewertet bei jeder Anfrage (kein Neustart nötig)
 
 
 class GDriveCfg(BaseModel):
@@ -140,6 +160,7 @@ class Config(BaseModel):
     asr: AsrCfg = Field(default_factory=AsrCfg)
     output: OutputCfg = Field(default_factory=OutputCfg)
     local: LocalCfg = Field(default_factory=LocalCfg)
+    asr_worker: AsrWorkerCfg = Field(default_factory=AsrWorkerCfg)
     gdrive: GDriveCfg = Field(default_factory=GDriveCfg)
     web: WebCfg = Field(default_factory=WebCfg)
     summary: SummaryCfg = Field(default_factory=SummaryCfg)

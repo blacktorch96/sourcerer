@@ -32,6 +32,8 @@ local_app = typer.Typer(help="Lokale Videodateien scannen und transkribieren.")
 app.add_typer(local_app, name="local")
 web_app = typer.Typer(help="Web-Oberfläche (Feeds verwalten, Transkripte lesen).")
 app.add_typer(web_app, name="web")
+asr_worker_app = typer.Typer(help="ASR-Worker für verteilten Betrieb (siehe README).")
+app.add_typer(asr_worker_app, name="asr-worker")
 profiles_app = typer.Typer(help="Profile (unabhängige Recherchebereiche) auflisten.")
 app.add_typer(profiles_app, name="profiles")
 console = Console()
@@ -435,6 +437,38 @@ def web_serve(
     # ein zweiter (Reloader-)Prozess würde diesen Zustand duplizieren
     flask_app.run(host=effective_host, port=effective_port,
                   debug=debug or cfg.web.debug, use_reloader=False)
+
+
+# ------------------------------------------------------------- asr-worker
+@asr_worker_app.command("serve")
+def asr_worker_serve(
+    host: str | None = typer.Option(None, "--host", help="Bind-Adresse (Default aus config.toml)"),
+    port: int | None = typer.Option(None, "--port", help="Port (Default aus config.toml)"),
+) -> None:
+    """ASR-Worker starten: nimmt Transkriptionsaufträge von einer entfernten
+    ytdigest-Instanz entgegen (siehe README, Abschnitt 'Verteilter Betrieb')."""
+    try:
+        from ytdigest.asr_worker import create_worker_app
+    except ImportError as exc:
+        console.print("[red]Flask fehlt.[/red] Installation mit dem Extra 'web': "
+                      "uv sync --extra web")
+        raise typer.Exit(EXIT_CONFIG) from exc
+
+    cfg = state.cfg
+    if cfg.asr.enabled and shutil.which("ffmpeg") is None:
+        console.print("[red]ffmpeg nicht gefunden — für ASR zwingend nötig.[/red]")
+        raise typer.Exit(EXIT_CONFIG)
+    if cfg.asr_worker.allowed_roots and shutil.which("ffprobe") is None:
+        console.print("[red]ffprobe nicht gefunden — für freigegebene Ordner "
+                      "zwingend nötig (kommt mit ffmpeg mit).[/red]")
+        raise typer.Exit(EXIT_CONFIG)
+
+    flask_app = create_worker_app(cfg)
+    effective_host = host or cfg.asr_worker.host
+    effective_port = port or cfg.asr_worker.port
+    console.print(f"ASR-Worker auf {effective_host}:{effective_port} "
+                  f"({len(cfg.asr_worker.allowed_roots)} Ordner-Muster freigegeben)")
+    flask_app.run(host=effective_host, port=effective_port, use_reloader=False)
 
 
 if __name__ == "__main__":  # pragma: no cover

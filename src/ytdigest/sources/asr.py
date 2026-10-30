@@ -7,6 +7,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import httpx
+
 from ytdigest.config import AsrCfg
 from ytdigest.models import TranscriptResult
 
@@ -14,7 +16,32 @@ log = logging.getLogger(__name__)
 
 
 class AsrUnavailable(RuntimeError):
-    """faster-whisper ist nicht installiert (Extra 'asr' fehlt)."""
+    """faster-whisper ist nicht installiert (Extra 'asr' fehlt) - lokal wie
+    auch auf dem Worker, falls ``cfg.remote_url`` gesetzt ist."""
+
+
+class AsrWorkerUnreachable(RuntimeError):
+    """Der konfigurierte ASR-Worker (``cfg.remote_url``, siehe asr_worker.py)
+    ist nicht erreichbar - wird bewusst NICHT in pipeline._try_asr abgefangen,
+    damit es wie ein normaler, über Retry/Backoff wiederholbarer Fehler
+    behandelt wird (statt wie ein permanenter 'kein Transkript')."""
+
+
+def _remote_transcribe(url: str, *, kind: str, cfg: AsrCfg) -> TranscriptResult | None:
+    base = cfg.remote_url.rstrip("/")
+    try:
+        resp = httpx.post(f"{base}/transcribe", json={"url": url, "kind": kind},
+                          timeout=cfg.remote_timeout_s)
+    except httpx.HTTPError as exc:
+        raise AsrWorkerUnreachable(f"ASR-Worker nicht erreichbar ({base}): {exc}") from exc
+    if resp.status_code == 503:
+        raise AsrUnavailable(resp.json().get("error", "ASR-Worker: ASR nicht verfügbar"))
+    if resp.status_code == 422:
+        return None
+    resp.raise_for_status()
+    data = resp.json()
+    return TranscriptResult(text=data["text"], source=data["source"],
+                            language=data.get("language", ""), asr_model=data.get("asr_model"))
 
 
 def _resolve_device(device: str) -> str:
@@ -115,6 +142,8 @@ def _run_whisper(media_path: Path, cfg: AsrCfg) -> TranscriptResult | None:
 
 
 def transcribe(url: str, *, cfg: AsrCfg, temp_dir: str | None) -> TranscriptResult | None:
+    if cfg.remote_url:
+        return _remote_transcribe(url, kind="youtube", cfg=cfg)
     _require_faster_whisper()
     workdir = Path(tempfile.mkdtemp(prefix="ytdigest_asr_", dir=temp_dir or None))
     try:
@@ -126,6 +155,12 @@ def transcribe(url: str, *, cfg: AsrCfg, temp_dir: str | None) -> TranscriptResu
 
 def transcribe_local(path: Path, *, cfg: AsrCfg) -> TranscriptResult | None:
     """Wie ``transcribe``, aber ohne den yt-dlp-Downloadumweg: die lokale
-    Videodatei liegt schon vor, faster-whisper liest sie direkt."""
+    Videodatei liegt schon vor, faster-whisper liest sie direkt.
+
+    Unterstützt (bewusst) kein ``cfg.remote_url``: eine Datei, die nur auf
+    diesem Rechner liegt, lässt sich dem Worker nicht per URL übergeben - das
+    bräuchte einen Datei-Upload. Für Ordner, die auf dem Worker-Rechner selbst
+    liegen, siehe stattdessen ``sources/local_remote.py``/``local:<http-url>``
+    in feeds.txt."""
     _require_faster_whisper()
     return _run_whisper(path, cfg)

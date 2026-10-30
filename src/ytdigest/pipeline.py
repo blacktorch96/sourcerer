@@ -21,7 +21,7 @@ from ytdigest.feeds.podcast_fetcher import fetch_podcast_feed
 from ytdigest.gdrive import DriveUploader, GDriveUnavailable
 from ytdigest.models import Feed, FeedEntry, RunReport, Video
 from ytdigest.naming import slugify
-from ytdigest.sources import asr, captions, channel, local, podcast
+from ytdigest.sources import asr, captions, channel, local, local_remote, podcast
 from ytdigest.storage import write_transcript
 
 log = logging.getLogger(__name__)
@@ -224,6 +224,53 @@ class Pipeline:
             added += 1
         return added
 
+    def _sync_remote_dir_line(self, line: ParsedFeedLine, report: RunReport,
+                              used_slugs: set[str]) -> str | None:
+        """Pendant zu ``_sync_local_dir_line`` für eine ``local:<http-url>``-
+        Zeile: der Ordner liegt auf einem anderen Rechner, freigegeben über den
+        ASR-Worker (siehe ``asr_worker.py``, ``sources/local_remote.py``). Gibt
+        None zurück, wenn der Worker/Ordner gerade nicht erreichbar ist - das
+        ist kein Dauerzustand (z. B. Hauptrechner aus) und wird beim nächsten
+        Sync erneut versucht, ohne den restlichen Sync zu blockieren."""
+        folder_url = line.local_remote_url
+        try:
+            files = local_remote.list_files(folder_url)
+        except local_remote.RemoteFolderUnavailable as exc:
+            log.warning("Remote-Ordner-Feed nicht erreichbar: %s", exc)
+            report.feeds_failed += 1
+            return None
+
+        channel_id = local_remote.folder_id_from_url(folder_url)
+        feed = self.repo.get_feed_by_channel_id(channel_id)
+        if feed is None:
+            slug = self._unique_slug(line.display_name or channel_id, used_slugs)
+            used_slugs.add(slug)
+            feed = self.repo.create_feed(
+                channel_id=channel_id, feed_url=local_remote.feed_url_for(folder_url),
+                dir_slug=slug, channel_title=channel_id, display_name=line.display_name,
+                resolved_from="local-remote",
+            )
+            log.info("Neuer Remote-Ordner-Feed: %s -> %s", folder_url, slug)
+        elif not feed.is_active:
+            self.repo.reactivate_feed(feed.id, display_name=line.display_name)
+
+        report.feeds_checked += 1
+        added = 0
+        for info in files:
+            filename = info["filename"]
+            video_id = f"{channel_id}/{filename}"
+            if self.repo.video_exists(video_id):
+                continue
+            entry = FeedEntry(
+                video_id=video_id, title=Path(filename).stem,
+                published_at=local_remote.parse_created_at(info["created_at"]),
+                url=local_remote.file_url_for(folder_url, filename),
+            )
+            self.repo.add_video(entry, feed.id, status="discovered")
+            added += 1
+        report.new_videos += added
+        return channel_id
+
     # ----------------------------------------------------------------- sync
     def sync(self, opts: RunOptions, report: RunReport) -> None:
         parsed = parse_feeds_file(self.cfg.paths.feeds_file)
@@ -234,6 +281,11 @@ class Pipeline:
         for line in parsed:
             if line.local_dir:
                 channel_id = self._sync_local_dir_line(line, report, used_slugs)
+                if channel_id:
+                    keep.add(channel_id)
+                continue
+            if line.local_remote_url:
+                channel_id = self._sync_remote_dir_line(line, report, used_slugs)
                 if channel_id:
                     keep.add(channel_id)
                 continue
@@ -462,10 +514,13 @@ class Pipeline:
         self.repo.mark_processing(video.video_id)
         current = self.repo.get_video(video.video_id) or video
         is_local = local.is_local_feed(feed.feed_url)
+        is_remote_local = local_remote.is_remote_local_feed(feed.feed_url)
         is_podcast = podcast.is_podcast_feed(feed.channel_id)
 
         if is_local:
             meta = local.probe(Path(video.url))
+        elif is_remote_local:
+            meta = local_remote.probe(video.url)
         elif is_podcast:
             meta = podcast.probe(current.duration_s)
         else:
@@ -479,10 +534,11 @@ class Pipeline:
             current.duration_s = meta.duration_s
 
         result = None
-        if is_local and not opts.asr_only:
+        if (is_local or is_remote_local) and not opts.asr_only:
             # bereits vorhandene gleichnamige .txt übernehmen, bevor die
             # Dauer-Filterung oder ASR überhaupt greift - siehe local.py
-            result = local.read_existing_transcript(Path(video.url))
+            result = (local.read_existing_transcript(Path(video.url)) if is_local
+                      else local_remote.read_existing_transcript(video.url))
 
         min_seconds = self._min_duration_seconds(opts)
         if (result is None and not opts.asr_only
@@ -492,7 +548,8 @@ class Pipeline:
             log.info("Übersprungen (zu kurz, %ds): %s", meta.duration_s, video.title)
             return
 
-        if result is None and not opts.asr_only and not is_local and not is_podcast:
+        if (result is None and not opts.asr_only
+                and not is_local and not is_remote_local and not is_podcast):
             result = captions.fetch_captions(
                 meta, self.cfg.transcripts.languages,
                 prefer_manual=self.cfg.transcripts.prefer_manual,
@@ -502,7 +559,8 @@ class Pipeline:
             )
 
         if result is None:
-            result = self._try_asr(current, meta, opts, is_local=is_local, is_podcast=is_podcast)
+            result = self._try_asr(current, meta, opts, is_local=is_local,
+                                   is_remote_local=is_remote_local, is_podcast=is_podcast)
 
         if result is None:
             self.repo.set_no_transcript(video.video_id)
@@ -526,7 +584,7 @@ class Pipeline:
             self._delete_source(current)
 
     def _try_asr(self, video: Video, meta, opts: RunOptions, *, is_local: bool = False,
-                is_podcast: bool = False):
+                is_remote_local: bool = False, is_podcast: bool = False):
         if opts.no_asr or not self.cfg.asr.enabled:
             return None
         max_seconds = self.cfg.asr.max_duration_min * 60
@@ -536,6 +594,8 @@ class Pipeline:
         try:
             if is_local:
                 return asr.transcribe_local(Path(video.url), cfg=self.cfg.asr)
+            if is_remote_local:
+                return local_remote.transcribe(video.url, timeout_s=self.cfg.asr.remote_timeout_s)
             if is_podcast:
                 return podcast.transcribe(
                     video.url, cfg=self.cfg.asr,
