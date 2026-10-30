@@ -6,7 +6,9 @@ faster-whisper) und sie dateibasiert in einer kanalbasierten Verzeichnisstruktur
 ablegt. Daneben kann `local scan` dieselbe Pipeline auch auf lokal abgelegte
 Videodateien anwenden.
 
-Details in [spec.md](spec.md).
+Details in [spec.md](spec.md). Schritt-für-Schritt-Installationsanleitung
+(inkl. verteiltem Betrieb Raspberry Pi + GPU-Hauptrechner) in
+[INSTALL.md](INSTALL.md).
 
 ## Installation
 
@@ -127,7 +129,9 @@ uv run ytdigest feeds add "podcast:https://rss.buzzsprout.com/2402174.rss" --nam
 
 Web-Oberfläche/Datenbank können auf einem anderen Gerät laufen als ASR/Ollama -
 z. B. die Web-Oberfläche dauerhaft auf einem Raspberry Pi, ASR und Ollama nur
-bei Bedarf auf einem GPU-Hauptrechner im selben Netz.
+bei Bedarf auf einem GPU-Hauptrechner im selben Netz. Schritt-für-Schritt-
+Anleitung inkl. Autostart (systemd/Taskplaner) und Cron in
+[INSTALL.md](INSTALL.md#2-verteilt-raspberry-pi--gpu-hauptrechner).
 
 **ASR-Worker (auf dem GPU-Rechner):**
 
