@@ -27,19 +27,41 @@ regelmäßiges Syncen `ytdigest run` per Cron (Linux/macOS) oder Taskplaner
 
 ## 2. Verteilt: Raspberry Pi + GPU-Hauptrechner
 
-### 2.1 GPU-Hauptrechner (ASR + Ollama)
+### 2.1 GPU-Hauptrechner (Windows 11): ASR + Ollama
 
-**Ollama** so starten, dass er im LAN erreichbar ist (nicht nur `127.0.0.1`):
+**`ffmpeg`** (Pflicht für den ASR-Pfad, liefert auch `ffprobe`):
 
-```bash
-# Linux: als Umgebungsvariable vor dem Start, oder dauerhaft per systemd-Override
-OLLAMA_HOST=0.0.0.0 ollama serve
+```powershell
+winget install ffmpeg
+```
+
+Danach neues Terminal öffnen, damit die PATH-Änderung greift; prüfen mit
+`ffmpeg -version`.
+
+**Ollama** läuft unter Windows als Hintergrunddienst mit Tray-Icon und bindet
+standardmäßig nur auf `127.0.0.1` - für Zugriff vom Pi aus muss `OLLAMA_HOST`
+dauerhaft als Windows-Umgebungsvariable gesetzt werden:
+
+```powershell
+setx OLLAMA_HOST "0.0.0.0"
 ollama pull qwen3.5:9b
+```
+
+Danach Ollama über das Tray-Icon beenden ("Quit Ollama") und neu starten
+(oder abmelden/anmelden), damit es die Variable übernimmt - ein bloßes
+`ollama serve` reicht nicht, wenn im Hintergrund schon eine Instanz läuft.
+
+**Windows Firewall:** beim ersten eingehenden Zugriff kommt normalerweise ein
+Freigabe-Dialog; alternativ vorab per PowerShell (als Administrator):
+
+```powershell
+New-NetFirewallRule -DisplayName "Ollama" -Direction Inbound -Protocol TCP -LocalPort 11434 -Action Allow
+New-NetFirewallRule -DisplayName "ytdigest ASR-Worker" -Direction Inbound -Protocol TCP -LocalPort 8765 -Action Allow
 ```
 
 **ASR-Worker:**
 
-```bash
+```powershell
 cd sourcerer
 uv sync --extra asr --extra web
 ```
@@ -53,30 +75,29 @@ port = 8765
 allowed_roots = ["~/Dokumente/sourcerer/*"]   # nur nötig für lokale Aufnahmeordner,
                                               # die der Pi per "local:http://..."-Feed
                                               # mitsynct; Glob-Muster, kein Neustart
-                                              # nötig wenn neue Unterordner entstehen
+                                              # nötig wenn neue Unterordner entstehen -
+                                              # unter Windows z. B.
+                                              # "C:/Users/<name>/Dokumente/sourcerer/*"
 ```
 
 Starten:
 
-```bash
+```powershell
 uv run ytdigest asr-worker serve --host 0.0.0.0 --port 8765
 ```
 
-Erreichbarkeit von einem anderen Gerät im LAN prüfen:
+Erreichbarkeit von einem anderen Gerät im LAN prüfen (z. B. vom Pi aus):
 
 ```bash
 curl http://<ip-des-hauptrechners>:8765/health
 ```
 
 **Dauerhaft im Hintergrund laufen lassen** (optional - ohne das läuft der
-Worker nur solange das Terminal offen ist):
-
-- **Windows:** Taskplaner-Aufgabe, Trigger "Bei Anmeldung", Aktion
-  `uv run ytdigest asr-worker serve --host 0.0.0.0 --port 8765` mit
-  Arbeitsverzeichnis = Projektordner.
-- **Linux:** systemd-User-Service, analog zu
-  [`ytdigest-web.service`](#systemd-unit-web-oberfläche) unten, nur mit
-  `ExecStart=... ytdigest asr-worker serve --host 0.0.0.0 --port 8765`.
+Worker nur solange das Terminal offen ist): Taskplaner-Aufgabe anlegen,
+Trigger "Bei der Anmeldung", Aktion `uv run ytdigest asr-worker serve --host
+0.0.0.0 --port 8765` mit "Starten in" = Projektordner (`cd sourcerer`-Pfad).
+Ollama selbst startet über sein eigenes Tray-Icon/Autostart bereits bei
+Login.
 
 Ist der Hauptrechner aus, merkt der Pi das beim nächsten Sync (ASR-/
 Ollama-Schritt schlägt fehl, Video landet als `failed` mit automatischem
