@@ -178,7 +178,6 @@ Neustarten in einem Schritt (bricht bei lokalen Änderungen ab, statt sie zu
 überschreiben; startet den Dienst bei einem Fehler sicherheitshalber wieder):
 
 ```bash
-chmod +x update-pi.sh   # einmalig
 ./update-pi.sh
 ```
 
