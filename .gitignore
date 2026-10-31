@@ -23,7 +23,9 @@ profiles/*/data/
 profiles/*/logs/
 profiles/*/transkripte/
 
-# lokale Konfiguration
+# lokale Konfiguration - maschinenspezifisch (Pi vs. GPU-Hauptrechner vs. Dev),
+# deshalb nicht getrackt; Vorlage siehe config.example.toml
+/config.toml
 /feeds.local.txt
 
 # Google-Drive-Credentials (Pfad ist in config.toml frei wählbar, Default hier mit ausgeschlossen)

@@ -15,6 +15,7 @@ Schritt-für-Schritt-Variante dazu.
 
 ```bash
 uv sync --extra asr --extra web   # ASR-Fallback + Web-Oberfläche
+cp config.example.toml config.toml   # einmalig, dann nach Bedarf anpassen
 uv run ytdigest init
 uv run ytdigest feeds add @t3dotgg
 uv run ytdigest run --limit 20
@@ -64,6 +65,7 @@ New-NetFirewallRule -DisplayName "ytdigest ASR-Worker" -Direction Inbound -Proto
 ```powershell
 cd sourcerer
 uv sync --extra asr --extra web
+copy config.example.toml config.toml   # einmalig, dann nach Bedarf anpassen
 ```
 
 In der `config.toml` auf dem Hauptrechner:
@@ -111,6 +113,7 @@ den Retry-Button in der Web-Oberfläche nutzen.
 git clone <dein-repo> sourcerer
 cd sourcerer
 uv sync --extra web        # kein --extra asr nötig, läuft remote über den Worker
+cp config.example.toml config.toml   # einmalig, dann nach Bedarf anpassen
 uv run ytdigest init
 ```
 

@@ -21,6 +21,14 @@ Der ASR-Pfad braucht zusätzlich `ffmpeg` im `PATH`.
 
 ## Nutzung
 
+`config.toml` ist nicht getrackt (maschinenspezifisch - Pi, GPU-Hauptrechner,
+Dev brauchen unterschiedliche Werte z. B. für `web.host`/`asr.remote_url`);
+einmalig aus der Vorlage anlegen:
+
+```bash
+cp config.example.toml config.toml   # einmalig, dann nach Bedarf anpassen
+```
+
 ```bash
 uv run ytdigest init                  # Datenbank und Verzeichnisse anlegen
 uv run ytdigest feeds add @t3dotgg    # Feed hinzufügen

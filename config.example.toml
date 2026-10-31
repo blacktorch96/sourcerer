@@ -24,6 +24,9 @@ min_duration_min = 8              # kürzere Videos überspringen (Shorts, Clips
 
 [asr]
 enabled           = true
+# remote_url      = "http://<ip-des-gpu-hauptrechners>:8765"  # gesetzt -> ASR läuft über
+#                                                              # den asr-worker statt lokal
+#                                                              # (siehe "Verteilter Betrieb")
 model             = "large-v3"
 device            = "cuda"        # "cuda" | "cpu" | "auto"
 compute_type      = "float16"
@@ -38,7 +41,7 @@ timestamp_source  = "published_utc"
 line_width        = 120     # Zeilenumbruch im Transkript-Text, 0 = kein Umbruch
 
 [local]
-extensions = ["mp4", "mkv", "webm", "mov", "avi", "m4v"]  # per "ytdigest local scan" berücksichtigte Endungen
+extensions = ["mp4", "mkv", "webm", "mov", "avi", "m4v", "mp3", "wav", "m4a"]
 min_age_s  = 30    # Datei muss so lange unverändert sein (wartet laufende Kopiervorgänge ab)
 
 [gdrive]
@@ -48,15 +51,23 @@ folder_id            = ""                           # ID des Drive-Zielordners (
 mirror_subdirs       = true                         # je Kanal einen Unterordner wie lokal (dir_slug) anlegen
 upload_sidecar       = true                         # auch die .json-Metadatei mit hochladen
 
+[web]
+host         = "127.0.0.1"  # bewusst nicht 0.0.0.0: kein Login vorgesehen, LAN-Zugriff
+                             # explizit per --host bzw. hier anfordern
+port         = 5050
+open_browser = true          # Standardbrowser beim Start von 'web serve' öffnen
+
 [summary]
-model = "gpt-oss:20b"
+# EXPERIMENTELL - lokale Zusammenfassung über Ollama, siehe README "Zusammenfassung"
+enabled     = true
+# ollama_host = "http://<ip-des-gpu-hauptrechners>:11434"  # siehe "Verteilter Betrieb"
+model       = "qwen3.5:9b"
 
 [asr_worker]
-host = "0.0.0.0"
-port = 8765
-allowed_roots = ["C:/local/dev/whisperX/data/fom/*"]   # nur nötig für lokale Aufnahmeordner,
-                                              # die der Pi per "local:http://..."-Feed
-                                              # mitsynct; Glob-Muster, kein Neustart
-                                              # nötig wenn neue Unterordner entstehen -
-                                              # unter Windows z. B.
-                                              # "C:/Users/<name>/Dokumente/sourcerer/*"
+# EXPERIMENTELL/eigenständig, nur relevant auf dem GPU-Hauptrechner, der
+# 'ytdigest asr-worker serve' betreibt - siehe README "Verteilter Betrieb"
+host          = "127.0.0.1"   # 0.0.0.0, um den Worker im LAN erreichbar zu machen
+port          = 8765
+allowed_roots = []   # Glob-Muster, z. B. "~/Dokumente/sourcerer/*" - jede aktuell
+                     # existierende Unterordner-Ebene, die darauf passt, wird
+                     # automatisch (lesend) freigegeben, kein Neustart nötig
