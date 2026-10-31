@@ -50,3 +50,13 @@ upload_sidecar       = true                         # auch die .json-Metadatei m
 
 [summary]
 model = "gpt-oss:20b"
+
+[asr_worker]
+host = "0.0.0.0"
+port = 8765
+allowed_roots = ["C:/local/dev/whisperX/data/fom/*"]   # nur nötig für lokale Aufnahmeordner,
+                                              # die der Pi per "local:http://..."-Feed
+                                              # mitsynct; Glob-Muster, kein Neustart
+                                              # nötig wenn neue Unterordner entstehen -
+                                              # unter Windows z. B.
+                                              # "C:/Users/<name>/Dokumente/sourcerer/*"

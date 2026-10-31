@@ -92,6 +92,6 @@ def write_transcript(cfg: Config, feed: Feed, video: Video,
 
     output_dir = cfg.paths.output_dir
     return (
-        str(txt_path.relative_to(output_dir)),
-        str(json_path.relative_to(output_dir)),
+        txt_path.relative_to(output_dir).as_posix(),
+        json_path.relative_to(output_dir).as_posix(),
     )

@@ -37,6 +37,15 @@ def _feed_from_row(row: sqlite3.Row) -> Feed:
     )
 
 
+def _as_posix_rel(path: str | None) -> str | None:
+    """Unter Windows geschriebene transcript_path/metadata_path-Werte enthalten
+    Backslashes (pathlib liefert dort OS-native Trenner) - auf Linux/macOS
+    wird daraus sonst ein einziger, nicht existierender Dateiname statt eines
+    Unterordnerpfads. Betrifft nur von Windows aus geschriebene/kopierte
+    Altdaten; storage.py schreibt neue Einträge bereits als Posix-Pfad."""
+    return path.replace("\\", "/") if path else path
+
+
 def _video_from_row(row: sqlite3.Row) -> Video:
     return Video(
         video_id=row["video_id"],
@@ -48,8 +57,8 @@ def _video_from_row(row: sqlite3.Row) -> Video:
         duration_s=row["duration_s"],
         source=row["source"],
         language=row["language"],
-        transcript_path=row["transcript_path"],
-        metadata_path=row["metadata_path"],
+        transcript_path=_as_posix_rel(row["transcript_path"]),
+        metadata_path=_as_posix_rel(row["metadata_path"]),
         char_count=row["char_count"],
         word_count=row["word_count"],
         attempts=row["attempts"],
