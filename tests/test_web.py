@@ -161,6 +161,68 @@ def test_dashboard_shows_no_recent_transcripts_placeholder(client):
     assert b"Noch keine fertigen Transkripte" in resp.data
 
 
+def test_dashboard_shows_empty_inbox_placeholder(client):
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Nichts zu verarbeiten" in resp.data
+
+
+def test_dashboard_inbox_lists_pending_videos_across_feeds(client, cfg, conn):
+    feed_a = _seed_feed_with_done_video(cfg, conn)
+    feed_b = Repo(conn).create_feed(channel_id="UCother", feed_url="https://example/other.xml",
+                                    dir_slug="Andere", channel_title="Anderer Kanal",
+                                    display_name=None)
+    Repo(conn).add_video(
+        FeedEntry("vid002", "Noch offen bei A", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid002"),
+        feed_a.id, status="discovered",
+    )
+    Repo(conn).add_video(
+        FeedEntry("vid003", "Noch offen bei B", datetime(2026, 1, 3, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid003"),
+        feed_b.id, status="discovered",
+    )
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Inbox (2)" in resp.data
+    assert b"Noch offen bei A" in resp.data
+    assert b"Noch offen bei B" in resp.data
+    assert b"Anderer Kanal" in resp.data
+    assert b"/transcripts/vid002/process" in resp.data
+    assert b"/transcripts/vid003/process" in resp.data
+    # das fertige Video aus _seed_feed_with_done_video gehört nicht in die Inbox
+    assert b"Erstes Video" not in resp.data.split(b"Letzter Sync")[0]
+
+
+def test_dashboard_inbox_shows_too_short_icon_for_force_option(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    Repo(conn).add_video(
+        FeedEntry("short001", "Nur ein Short", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=short001"),
+        feed.id, status="skipped", skip_reason="too_short", duration_s=45,
+    )
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Nur ein Short" in resp.data
+    assert b"trotzdem herunterladen" in resp.data.lower()
+
+
+def test_dashboard_inbox_caps_at_limit_and_notes_remainder(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    repo = Repo(conn)
+    for i in range(25):
+        repo.add_video(
+            FeedEntry(f"pending{i:03d}", f"Offenes Video {i}",
+                     datetime(2026, 1, 1, tzinfo=UTC), f"https://youtube.com/watch?v=p{i}"),
+            feed.id, status="discovered",
+        )
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Inbox (25)" in resp.data
+    assert b"5 weitere" in resp.data
+
+
 def test_dashboard_shows_recently_added_transcripts(client, cfg, conn):
     _seed_feed_with_done_video(cfg, conn)
     conn.execute("UPDATE videos SET processed_at = '2026-09-30T08:00:00Z' "

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Dashboard - ytdigest{% endblock %}
 {% block content %}
   <h1>Dashboard</h1>
@@ -22,6 +23,38 @@
     </form>
 
     {% include "_joblog.html" %}
+  </div>
+
+  <h2>Inbox{% if inbox_total %} ({{ inbox_total }}){% endif %}</h2>
+  <div class="card {{ 'table-card' if inbox else '' }}">
+    {% if inbox %}
+      <table class="recent-table">
+        <thead><tr><th>Kanal</th><th>Titel</th><th>Status</th><th>Veröffentlicht</th></tr></thead>
+        <tbody>
+          {% for video, feed in inbox %}
+            {% set too_short = video.status == 'skipped' and video.skip_reason == 'too_short' %}
+            <tr>
+              <td>{{ feed.name if feed else "—" }}</td>
+              <td>{{ video.title }}</td>
+              <td>
+                {% if too_short %}{{ icons.too_short_icon(video.video_id, jobs.running) }}
+                {% else %}{{ icons.pending_icon(video.video_id, jobs.running) }}
+                {% endif %}
+              </td>
+              <td>{{ video.published_at[:10] }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if inbox_total > inbox|length %}
+        <p class="muted inbox-more">
+          {{ inbox_total - inbox|length }} weitere - vollständige Liste je Kanal unter
+          <a href="{{ url_for('transcripts.index') }}">Transkripte</a>.
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="muted">Nichts zu verarbeiten - alles aktuell.</p>
+    {% endif %}
   </div>
 
   <h2>Letzter Sync</h2>
