@@ -400,3 +400,34 @@ button.status-icon:disabled { cursor: not-allowed; }
 }
 .to-top:hover { background: var(--accent-hover); }
 .to-top[hidden] { display: none; }
+
+/* Fallback unabhängig von der Bildschirmbreite: reicht die Nav trotz des
+   Umbruchs unten (schmale Geräte, langer Profilname) immer noch nicht in
+   eine Zeile, lieber horizontal scrollen als Zeilenumbruch/Überlauf der
+   ganzen Topbar. */
+.topbar nav { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* ----------------------------------------------------------- schmale Geräte
+   Bisher kein Breakpoint vorhanden - Topbar-Nav und Filterleiste (zwei
+   Text-Inputs mit min-width:240px nebeneinander) liefen auf Handy-Breite
+   (z. B. 390-412px) in horizontales Scrollen der ganzen Seite. */
+@media (max-width: 640px) {
+  .topbar { flex-wrap: wrap; gap: 8px 16px; padding: 12px 16px; }
+  .topbar nav { order: 3; width: 100%; }
+  .profile-switch { margin-left: 0; }
+
+  main { padding: 20px 16px 72px; }
+
+  .filter-bar { flex-wrap: wrap; }
+  .filter-bar select, .filter-bar input[type=text],
+  .filter-bar button, .filter-bar a { width: 100%; min-width: 0; }
+
+  /* Mindestgröße für Touch-Ziele (WCAG empfiehlt ~44px) - 26px war für
+     Maus-Bedienung gedacht, auf dem Handy aber knapp für die Download-/
+     Transkribieren-Buttons in Inbox und Transkript-Liste */
+  .status-icon { width: 36px; height: 36px; }
+
+  /* font: inherit übernimmt sonst body (15px) - auf dem Handy angenehmer
+     zu tippen */
+  input, select, button, textarea { font-size: 16px; }
+}
