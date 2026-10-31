@@ -325,6 +325,78 @@ def test_transcript_detail_shows_existing_summary(client, cfg, conn):
     assert b"/transcripts/vid001/summarize" in resp.data
 
 
+def test_transcripts_search_finds_match_in_transcript_body(client, cfg, conn):
+    _seed_feed_with_done_video(cfg, conn)
+    resp = client.get("/transcripts?q=Welt")
+    assert resp.status_code == 200
+    assert b"Erstes Video" in resp.data
+    assert b"<mark>Welt</mark>" in resp.data
+    assert b"1 Treffer" in resp.data
+
+
+def test_transcripts_search_falls_back_to_title_match(client, cfg, conn):
+    # "Erstes" steht nur im Titel, nicht im Transkripttext ("Hallo Welt.")
+    _seed_feed_with_done_video(cfg, conn)
+    resp = client.get("/transcripts?q=Erstes")
+    assert resp.status_code == 200
+    assert b"Erstes Video" in resp.data
+
+
+def test_transcripts_search_no_match_shows_empty_state(client, cfg, conn):
+    _seed_feed_with_done_video(cfg, conn)
+    resp = client.get("/transcripts?q=nichtvorhanden")
+    assert resp.status_code == 200
+    assert b"Keine Treffer." in resp.data
+    assert b"0 Treffer" in resp.data
+
+
+def test_transcripts_search_is_case_insensitive(client, cfg, conn):
+    _seed_feed_with_done_video(cfg, conn)
+    resp = client.get("/transcripts?q=WELT")
+    assert resp.status_code == 200
+    assert b"1 Treffer" in resp.data
+
+
+def test_transcripts_search_scoped_to_selected_feed(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    other = Repo(conn).create_feed(channel_id="UCother", feed_url="https://example/other.xml",
+                                   dir_slug="Andere", channel_title="Anderer Kanal",
+                                   display_name=None)
+    Repo(conn).add_video(
+        FeedEntry("vid003", "Drittes Video", datetime(2026, 1, 3, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid003"),
+        other.id, status="discovered",
+    )
+    conn.execute(
+        "UPDATE videos SET status='done', transcript_path=? WHERE video_id='vid003'",
+        ("Andere/clip.txt",),
+    )
+    target_dir = cfg.paths.output_dir / "Andere"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "clip.txt").write_text("Auch Welt hier.\n", encoding="utf-8")
+
+    resp = client.get(f"/transcripts?q=Welt&feed={feed.id}")
+    assert resp.status_code == 200
+    assert b"Erstes Video" in resp.data
+    assert b"Drittes Video" not in resp.data
+
+
+def test_transcripts_search_skips_unresolvable_transcript_path(client, cfg, conn):
+    # dieselbe Pfad-Traversal-/Datenintegritätslücke wie beim Download - die
+    # Suche darf dabei nicht mit 404/500 abbrechen, sondern überspringt den
+    # betroffenen Datensatz einfach (siehe _resolve_output_path)
+    _seed_feed_with_done_video(cfg, conn)
+    conn.execute(
+        "UPDATE videos SET transcript_path = ? WHERE video_id = 'vid001'",
+        ("../outside.txt",),
+    )
+    (cfg.paths.output_dir.parent / "outside.txt").write_text("Welt geheim", encoding="utf-8")
+
+    resp = client.get("/transcripts?q=Welt")
+    assert resp.status_code == 200
+    assert b"Keine Treffer." in resp.data
+
+
 def test_transcripts_download_rejects_path_traversal(client, cfg, conn):
     _seed_feed_with_done_video(cfg, conn)
     conn.execute(

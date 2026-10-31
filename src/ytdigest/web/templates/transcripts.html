@@ -13,7 +13,10 @@
         </option>
       {% endfor %}
     </select>
-    <input type="text" id="title-filter" placeholder="Titel durchsuchen …">
+    <input type="text" id="title-filter" placeholder="Titel durchsuchen … (in dieser Liste)">
+    <input type="text" name="q" value="{{ query }}" placeholder="Volltext durchsuchen …">
+    <button type="submit">Suchen</button>
+    {% if query %}<a href="{{ url_for('transcripts.index', feed=selected_feed_id) }}">Suche verlassen</a>{% endif %}
   </form>
 
   {% if sync_error %}
@@ -23,8 +26,26 @@
     </ul>
   {% endif %}
 
-  {% if selected_feed_id %}<div class="card">{% include "_joblog.html" %}</div>{% endif %}
+  {% if selected_feed_id and not query %}<div class="card">{% include "_joblog.html" %}</div>{% endif %}
 
+  {% if query %}
+    <p class="muted">
+      {{ search_results|length }} Treffer für "{{ query }}"
+      {% if search_results|length == 50 %}(weitere ausgeblendet){% endif %}
+    </p>
+    <div class="card table-card">
+      <ul class="search-results">
+        {% for video, feed, snippet in search_results %}
+          <li class="search-result">
+            <a href="{{ url_for('transcripts.detail', video_id=video.video_id) }}">{{ video.title }}</a>
+            <span class="muted">{{ feed.name if feed else "—" }} · {{ video.published_at[:10] }}</span>
+            <p class="search-snippet">{{ snippet }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+      {% if not search_results %}<p class="muted">Keine Treffer.</p>{% endif %}
+    </div>
+  {% else %}
   <div class="card table-card">
     <table class="transcripts-table" id="transcripts-table">
       <thead>
@@ -80,4 +101,5 @@
     </table>
   </div>
   {% if not rows %}<p class="muted">Keine Videos für diese Auswahl.</p>{% endif %}
+  {% endif %}
 {% endblock %}

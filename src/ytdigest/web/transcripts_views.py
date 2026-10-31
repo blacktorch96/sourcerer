@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
+from markupsafe import Markup, escape
 
 from ytdigest.db.repo import Repo
 from ytdigest.db.schema import connect
@@ -120,23 +121,78 @@ def _dewrap_paragraphs(text: str) -> list[str]:
     return result
 
 
-def _safe_output_path(rel: str | None) -> Path:
-    """Löst einen in der DB gespeicherten relativen Pfad gegen output_dir auf.
+def _resolve_output_path(rel: str | None) -> Path | None:
+    """Löst einen in der DB gespeicherten relativen Pfad gegen output_dir auf,
+    oder None statt 404 - für Stellen wie die Volltextsuche, die eine
+    einzelne nicht auflösbare Datei überspringen statt die ganze Anfrage
+    abzubrechen.
 
     Die Pfade stammen aus der eigenen DB, nicht aus der Anfrage - die
     '..'-Prüfung ist trotzdem billig und macht die Route robust, falls ein
     Datensatz je manipuliert oder fehlerhaft geschrieben würde."""
     if not rel:
-        abort(404)
+        return None
     output_dir = get_cfg().paths.output_dir.resolve()
     candidate = (output_dir / rel).resolve()
     if not candidate.is_relative_to(output_dir) or not candidate.is_file():
+        return None
+    return candidate
+
+
+def _safe_output_path(rel: str | None) -> Path:
+    candidate = _resolve_output_path(rel)
+    if candidate is None:
         abort(404)
     return candidate
 
 
+_SEARCH_MAX_RESULTS = 50
+_SNIPPET_CONTEXT = 80  # Zeichen vor/nach dem Fund im Vorschau-Ausschnitt
+
+
+def _snippet(text: str, needle: str) -> Markup:
+    """Kurzer, escaped Ausschnitt um den ersten Fund von ``needle`` in
+    ``text``, mit <mark> um das Suchwort - für die Trefferliste der
+    Volltextsuche. Groß-/Kleinschreibung des Fundorts bleibt erhalten."""
+    lower = text.lower()
+    idx = lower.find(needle.lower())
+    if idx == -1:
+        return Markup(escape(text[: _SNIPPET_CONTEXT * 2]))
+    start = max(0, idx - _SNIPPET_CONTEXT)
+    end = min(len(text), idx + len(needle) + _SNIPPET_CONTEXT)
+    prefix = "…" if start > 0 else ""
+    suffix = "…" if end < len(text) else ""
+    before = text[start:idx]
+    match = text[idx : idx + len(needle)]
+    after = text[idx + len(needle) : end]
+    return Markup(f"{prefix}{escape(before)}<mark>{escape(match)}</mark>{escape(after)}{suffix}")
+
+
+def _search_transcripts(repo: Repo, *, feed_id: int | None, query: str) -> list[tuple]:
+    """Lineare Volltextsuche über die Transkript-Dateien aller fertigen
+    Videos (optional auf einen Feed eingeschränkt) - für die Größenordnung
+    eines persönlichen Archivs reicht das, ohne einen eigenen Such-Index
+    pflegen zu müssen. Bricht bei ``_SEARCH_MAX_RESULTS`` Treffern ab."""
+    feeds_by_id = {feed.id: feed for feed in repo.list_feeds()}
+    needle = query.lower()
+    results: list[tuple] = []
+    for video in repo.list_videos(feed_id=feed_id, statuses=("done",)):
+        path = _resolve_output_path(video.transcript_path)
+        if path is None:
+            continue
+        text = path.read_text(encoding="utf-8")
+        if needle not in text.lower() and needle not in video.title.lower():
+            continue
+        snippet_source = text if needle in text.lower() else video.title
+        results.append((video, feeds_by_id.get(video.feed_id), _snippet(snippet_source, query)))
+        if len(results) >= _SEARCH_MAX_RESULTS:
+            break
+    return results
+
+
 @bp.get("")
 def index():
+    query = request.args.get("q", "").strip()
     conn = connect(get_cfg().paths.database)
     try:
         repo = Repo(conn)
@@ -144,12 +200,19 @@ def index():
         feed_id = request.args.get("feed", type=int)
         sync_error = None
         pending = []
-        if feed_id is not None:
-            feed = _feed_for(repo, feed_id)
-            if feed is not None:
-                sync_error = _sync_feed_quick(repo, feed)
-                pending = repo.list_videos(feed_id=feed_id, statuses=_PENDING_STATUSES)
-        videos = repo.list_videos(feed_id=feed_id, statuses=("done",))
+        search_results = []
+        if query:
+            # Volltextsuche ersetzt die normale Liste für diese Anfrage -
+            # kein Live-Sync nötig, es wird ja nur im bereits Vorhandenen gesucht.
+            search_results = _search_transcripts(repo, feed_id=feed_id, query=query)
+            videos = []
+        else:
+            if feed_id is not None:
+                feed = _feed_for(repo, feed_id)
+                if feed is not None:
+                    sync_error = _sync_feed_quick(repo, feed)
+                    pending = repo.list_videos(feed_id=feed_id, statuses=_PENDING_STATUSES)
+            videos = repo.list_videos(feed_id=feed_id, statuses=("done",))
     finally:
         conn.close()
     rows = sorted(
@@ -161,7 +224,8 @@ def index():
     rows = [(video, is_done, is_done and get_summary_state(video.transcript_path).text is not None)
            for video, is_done in rows]
     return render_template("transcripts.html", feeds=feeds, rows=rows,
-                          selected_feed_id=feed_id, sync_error=sync_error, jobs=get_jobs())
+                          selected_feed_id=feed_id, sync_error=sync_error, jobs=get_jobs(),
+                          query=query, search_results=search_results)
 
 
 @bp.get("/<path:video_id>")
