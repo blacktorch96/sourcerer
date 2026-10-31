@@ -170,6 +170,18 @@ WantedBy=multi-user.target
 sudo systemctl enable --now ytdigest-web
 ```
 
+#### Updates
+
+Mit laufendem `ytdigest-web`-Service übernimmt
+[`update-pi.sh`](update-pi.sh) das Stoppen, `git pull`, `uv sync` und
+Neustarten in einem Schritt (bricht bei lokalen Änderungen ab, statt sie zu
+überschreiben; startet den Dienst bei einem Fehler sicherheitshalber wieder):
+
+```bash
+chmod +x update-pi.sh   # einmalig
+./update-pi.sh
+```
+
 #### Regelmäßiges Syncen per Cron
 
 ```cron
