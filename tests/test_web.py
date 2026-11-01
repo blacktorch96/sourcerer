@@ -223,6 +223,36 @@ def test_dashboard_inbox_caps_at_limit_and_notes_remainder(client, cfg, conn):
     assert b"5 weitere" in resp.data
 
 
+def test_dashboard_hides_feed_health_banner_when_no_errors(client, cfg, conn):
+    _seed_feed_with_done_video(cfg, conn)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"mit Fehler beim letzten Abruf" not in resp.data
+
+
+def test_dashboard_shows_feed_health_banner_for_failing_feed(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    conn.execute(
+        "UPDATE feeds SET last_error = ? WHERE id = ?",
+        ("http_404", feed.id),
+    )
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"1 Feed mit Fehler beim letzten Abruf" in resp.data
+    assert b"http_404" in resp.data
+
+
+def test_dashboard_feed_health_banner_ignores_inactive_feeds(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    conn.execute(
+        "UPDATE feeds SET last_error = ?, is_active = 0 WHERE id = ?",
+        ("http_404", feed.id),
+    )
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"mit Fehler beim letzten Abruf" not in resp.data
+
+
 def test_dashboard_shows_recently_added_transcripts(client, cfg, conn):
     _seed_feed_with_done_video(cfg, conn)
     conn.execute("UPDATE videos SET processed_at = '2026-09-30T08:00:00Z' "
@@ -242,6 +272,37 @@ def test_feeds_page_lists_feed(client, cfg, conn):
     assert resp.status_code == 200
     assert b"Test Kanal" in resp.data
     assert f'href="/transcripts?feed={feed.id}"'.encode() in resp.data
+
+
+def test_feeds_page_shows_error_badge_and_message(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    conn.execute(
+        "UPDATE feeds SET last_error = ? WHERE id = ?",
+        ("http_404", feed.id),
+    )
+    resp = client.get("/feeds")
+    assert resp.status_code == 200
+    assert b"Fehler" in resp.data
+    assert b"http_404" in resp.data
+
+
+def test_feeds_page_shows_ok_when_no_error(client, cfg, conn):
+    _seed_feed_with_done_video(cfg, conn)
+    resp = client.get("/feeds")
+    assert resp.status_code == 200
+    assert b">OK<" in resp.data
+
+
+def test_feeds_page_inactive_feed_hides_error_badge(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    conn.execute(
+        "UPDATE feeds SET last_error = ?, is_active = 0 WHERE id = ?",
+        ("http_404", feed.id),
+    )
+    resp = client.get("/feeds")
+    assert resp.status_code == 200
+    assert b"inaktiv" in resp.data
+    assert b">Fehler<" not in resp.data
 
 
 def test_feeds_add_writes_feeds_txt_and_starts_job(app, client, cfg):

@@ -199,6 +199,20 @@ h2 {
 .badge-danger { background: var(--danger-soft); color: var(--danger); }
 .badge-neutral { background: var(--neutral-soft); color: var(--neutral); }
 
+.feed-error-msg {
+  margin-top: 3px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78em;
+  color: var(--danger);
+}
+
+.feed-health-banner { border-left: 3px solid var(--danger); }
+.feed-health-banner ul { margin: 6px 0 0; padding-left: 20px; }
+.feed-health-banner li { margin: 2px 0; }
+
 /* -------------------------------------------------------------- tables */
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
@@ -210,6 +224,8 @@ th {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+tr.row-error { background: var(--danger-soft); }
 tbody tr:hover td { background: var(--neutral-soft); }
 
 /* Auto-Layout berechnet die Mindestbreite einer Zelle mit einem

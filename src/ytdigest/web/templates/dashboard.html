@@ -4,6 +4,20 @@
 {% block content %}
   <h1>Dashboard</h1>
 
+  {% if failing_feeds %}
+    <div class="card feed-health-banner">
+      <strong>{{ failing_feeds|length }} Feed{{ "s" if failing_feeds|length != 1 else "" }} mit Fehler beim letzten Abruf:</strong>
+      <ul>
+        {% for feed in failing_feeds %}
+          <li>
+            <a href="{{ url_for('feeds.index') }}">{{ feed.name }}</a>:
+            <span class="text-danger">{{ feed.last_error }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
   <div class="stat-grid">
     {% for name, count in rows %}
       {% set tone = {

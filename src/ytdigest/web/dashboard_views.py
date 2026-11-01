@@ -34,5 +34,7 @@ def index():
     rows = [(name, counts.get(name, 0)) for name in _STATUSES]
     recent = [(video, feeds_by_id.get(video.feed_id)) for video in recent_done]
     inbox = [(video, feeds_by_id.get(video.feed_id)) for video in pending[:_INBOX_LIMIT]]
+    failing_feeds = [f for f in feeds_by_id.values() if f.is_active and f.last_error]
     return render_template("dashboard.html", rows=rows, errors=errors, recent=recent,
-                          inbox=inbox, inbox_total=len(pending), jobs=get_jobs())
+                          inbox=inbox, inbox_total=len(pending), jobs=get_jobs(),
+                          failing_feeds=failing_feeds)

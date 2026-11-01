@@ -16,11 +16,11 @@
   <div class="card table-card">
     <table class="feeds-table">
       <colgroup>
-        <col style="width: 22%">
-        <col style="width: 16%">
-        <col style="width: 8%">
+        <col style="width: 18%">
+        <col style="width: 13%">
+        <col style="width: 7%">
         <col style="width: 12%">
-        <col style="width: 10%">
+        <col style="width: 18%">
         <col style="width: 290px">
       </colgroup>
       <thead>
@@ -30,16 +30,19 @@
       </thead>
       <tbody>
         {% for feed in feeds %}
-          <tr>
+          <tr class="{{ 'row-error' if feed.is_active and feed.last_error else '' }}">
             <td><a href="{{ url_for('transcripts.index', feed=feed.id) }}">{{ feed.name }}</a></td>
             <td><code>{{ feed.dir_slug }}</code></td>
             <td>{{ counts.get(feed.id, 0) }}</td>
-            <td>{{ feed.last_checked_at[:10] if feed.last_checked_at else "—" }}</td>
+            <td>{{ feed.last_checked_at[:16].replace('T', ' ') if feed.last_checked_at else "—" }}</td>
             <td>
-              {% if feed.is_active %}
-                <span class="badge badge-success">aktiv</span>
-              {% else %}
+              {% if not feed.is_active %}
                 <span class="badge badge-neutral">inaktiv</span>
+              {% elif feed.last_error %}
+                <span class="badge badge-danger">Fehler</span>
+                <div class="feed-error-msg" title="{{ feed.last_error }}">{{ feed.last_error }}</div>
+              {% else %}
+                <span class="badge badge-success">OK</span>
               {% endif %}
             </td>
             <td class="actions">
