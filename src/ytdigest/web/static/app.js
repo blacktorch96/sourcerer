@@ -98,6 +98,28 @@
     watchStream(true);
   }
 
+  function bindInboxBulkSelect() {
+    var selectAll = qs("#inbox-select-all");
+    var submitBtn = qs("#inbox-bulk-dismiss");
+    if (!selectAll || !submitBtn) return;
+    var rowBoxes = function () { return qsa(".inbox-row-checkbox"); };
+
+    function updateButton() {
+      submitBtn.disabled = !rowBoxes().some(function (cb) { return cb.checked; });
+    }
+
+    selectAll.addEventListener("change", function () {
+      rowBoxes().forEach(function (cb) { cb.checked = selectAll.checked; });
+      updateButton();
+    });
+    rowBoxes().forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        if (!cb.checked) selectAll.checked = false;
+        updateButton();
+      });
+    });
+  }
+
   function bindToTop() {
     var btn = qs("#to-top");
     if (!btn) return;
@@ -113,6 +135,7 @@
     bindJobForms();
     bindToTop();
     bindTitleFilter();
+    bindInboxBulkSelect();
     reconnectIfRunning();
   });
 })();

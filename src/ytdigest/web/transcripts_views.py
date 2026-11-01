@@ -319,3 +319,27 @@ def dismiss(video_id: str):
         conn.close()
     flash(f'"{video.title}" als gelesen markiert.', "ok")
     return redirect(request.referrer or url_for("dashboard.index"))
+
+
+@bp.post("/dismiss-bulk")
+def dismiss_bulk():
+    """Mehrfachauswahl in der Inbox (Checkboxen) auf einmal als gelesen
+    markieren - gleiche Semantik wie dismiss(), nur für mehrere IDs in einem
+    Request statt eines Klicks je Zeile."""
+    video_ids = [v for v in request.form.getlist("video_id") if v]
+    if not video_ids:
+        flash("Keine Videos ausgewählt.", "error")
+        return redirect(request.referrer or url_for("dashboard.index"))
+
+    conn = connect(get_cfg().paths.database)
+    try:
+        repo = Repo(conn)
+        n = 0
+        for video_id in video_ids:
+            if repo.get_video(video_id) is not None:
+                repo.skip_video(video_id, "dismissed")
+                n += 1
+    finally:
+        conn.close()
+    flash(f"{n} Video(s) als gelesen markiert.", "ok")
+    return redirect(request.referrer or url_for("dashboard.index"))

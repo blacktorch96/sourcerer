@@ -27,8 +27,14 @@ def index():
         counts = repo.counts_by_status()
         errors = repo.recent_errors(10)
         recent_done = repo.recent_done(10)
+        # 'too_short' gehört bewusst nicht in die Inbox: die Dauer steht erst
+        # nach einem Verarbeitungsversuch fest, nicht beim RSS-Sync - diese
+        # Videos sind kein "noch zu erledigen", sondern schon fertig
+        # bearbeitet (übersprungen). Auf der Transkripte-Seite je Feed tauchen
+        # sie trotzdem weiter auf (siehe dortiger Kommentar), nur eben nicht
+        # kanalübergreifend in der Inbox.
         pending = [v for v in repo.list_videos(statuses=_PENDING_STATUSES)
-                  if v.skip_reason != "dismissed"]
+                  if v.skip_reason not in ("dismissed", "too_short")]
         feeds_by_id = {f.id: f for f in repo.list_feeds()}
     finally:
         conn.close()

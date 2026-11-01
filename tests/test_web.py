@@ -195,7 +195,10 @@ def test_dashboard_inbox_lists_pending_videos_across_feeds(client, cfg, conn):
     assert b"Erstes Video" not in resp.data.split(b"Letzter Sync")[0]
 
 
-def test_dashboard_inbox_shows_too_short_icon_for_force_option(client, cfg, conn):
+def test_dashboard_inbox_hides_too_short_video(client, cfg, conn):
+    # zu kurze Videos sind bereits fertig bearbeitet (übersprungen), kein
+    # "noch zu erledigen" - gehören daher nicht in die Inbox (anders als auf
+    # der Transkripte-Seite je Feed, wo der Erzwingen-Button weiter nötig ist)
     feed = _seed_feed_with_done_video(cfg, conn)
     Repo(conn).add_video(
         FeedEntry("short001", "Nur ein Short", datetime(2026, 1, 2, tzinfo=UTC),
@@ -204,8 +207,8 @@ def test_dashboard_inbox_shows_too_short_icon_for_force_option(client, cfg, conn
     )
     resp = client.get("/")
     assert resp.status_code == 200
-    assert b"Nur ein Short" in resp.data
-    assert b"trotzdem herunterladen" in resp.data.lower()
+    assert b"Nur ein Short" not in resp.data
+    assert b"Nichts zu verarbeiten" in resp.data
 
 
 def test_dashboard_inbox_caps_at_limit_and_notes_remainder(client, cfg, conn):
@@ -269,6 +272,67 @@ def test_dashboard_inbox_hides_dismissed_video(client, cfg, conn):
     assert resp.status_code == 200
     assert b"Erledigtes Video" not in resp.data
     assert b"Nichts zu verarbeiten" in resp.data
+
+
+def test_dashboard_inbox_shows_bulk_select_checkboxes(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    Repo(conn).add_video(
+        FeedEntry("vid002", "Noch offen", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid002"),
+        feed.id, status="discovered",
+    )
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b'id="inbox-select-all"' in resp.data
+    assert b'name="video_id" value="vid002"' in resp.data
+    assert b'form="inbox-bulk-form"' in resp.data
+    assert b"/transcripts/dismiss-bulk" in resp.data
+
+
+def test_transcripts_dismiss_bulk_marks_all_selected_videos(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    repo = Repo(conn)
+    repo.add_video(
+        FeedEntry("vid002", "Erstes offenes", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid002"),
+        feed.id, status="discovered",
+    )
+    repo.add_video(
+        FeedEntry("vid003", "Zweites offenes", datetime(2026, 1, 3, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid003"),
+        feed.id, status="discovered",
+    )
+
+    resp = client.post("/transcripts/dismiss-bulk",
+                       data={"video_id": ["vid002", "vid003"]}, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"2 Video(s) als gelesen markiert" in resp.data
+
+    assert repo.get_video("vid002").skip_reason == "dismissed"
+    assert repo.get_video("vid003").skip_reason == "dismissed"
+
+
+def test_transcripts_dismiss_bulk_ignores_unknown_ids(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    repo = Repo(conn)
+    repo.add_video(
+        FeedEntry("vid002", "Offenes Video", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid002"),
+        feed.id, status="discovered",
+    )
+
+    resp = client.post("/transcripts/dismiss-bulk",
+                       data={"video_id": ["vid002", "does-not-exist"]},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"1 Video(s) als gelesen markiert" in resp.data
+    assert repo.get_video("vid002").skip_reason == "dismissed"
+
+
+def test_transcripts_dismiss_bulk_without_selection_flashes_error(client, cfg, conn):
+    resp = client.post("/transcripts/dismiss-bulk", data={}, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"Keine Videos ausgew\xc3\xa4hlt" in resp.data
 
 
 def test_dashboard_hides_feed_health_banner_when_no_errors(client, cfg, conn):
