@@ -26,7 +26,10 @@ from ytdigest.models import Feed
 from ytdigest.pipeline import RunOptions
 from ytdigest.sources import local, podcast
 from ytdigest.web.context import get_cfg, get_jobs
-from ytdigest.web.summary_views import get_summary_state  # experimentell, siehe dortige Moduldoc
+from ytdigest.web.summary_views import (  # experimentell, siehe dortige Moduldoc
+    get_questions,
+    get_summary_state,
+)
 
 bp = Blueprint("transcripts", __name__, url_prefix="/transcripts")
 
@@ -252,8 +255,10 @@ def detail(video_id: str):
     text = _safe_output_path(video.transcript_path).read_text(encoding="utf-8")
     paragraphs = _dewrap_paragraphs(text)
     summary = get_summary_state(video.transcript_path)
+    questions = get_questions(video.transcript_path)
     return render_template("transcript_detail.html", video=video, feed=feed,
-                          paragraphs=paragraphs, summary=summary, jobs=get_jobs())
+                          paragraphs=paragraphs, summary=summary, questions=questions,
+                          jobs=get_jobs())
 
 
 @bp.get("/<path:video_id>/download/<ext>")

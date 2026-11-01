@@ -4,6 +4,7 @@ entfernt werden kann, ohne die übrigen Web-Tests anzufassen."""
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -254,4 +255,127 @@ def test_transcript_detail_shows_ask_form(client, cfg, conn):
     resp = client.get("/transcripts/vid001")
     assert resp.status_code == 200
     assert b"/transcripts/vid001/ask" in resp.data
-    assert b'data-reload="false"' in resp.data
+    assert b"Frage zum Transkript" in resp.data
+
+
+def test_transcript_detail_hides_question_history_when_empty(client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    resp = client.get("/transcripts/vid001")
+    assert resp.status_code == 200
+    assert b"qa-list" not in resp.data
+
+
+def _questions_json_path(cfg, video_id="vid001"):
+    return cfg.paths.output_dir / "Test" / f"{video_id}.questions.json"
+
+
+def test_ask_route_persists_answer_to_questions_json(app, client, cfg, conn, monkeypatch):
+    _seed_done_video(cfg, conn)
+    monkeypatch.setattr(summary_views.ollama_summarize, "ask",
+                        lambda text, question, cfg: SummaryResult(text="42."))
+    captured = {}
+    app.extensions["ytdigest_jobs"].start = (
+        lambda label, func: captured.setdefault("func", func) or True
+    )
+
+    client.post("/transcripts/vid001/ask", data={"question": "Wie lautet die Antwort?"})
+    captured["func"](None)  # führt den Job synchron aus, wie es JobRunner täte
+
+    data = json.loads(_questions_json_path(cfg).read_text(encoding="utf-8"))
+    assert len(data) == 1
+    assert data[0]["question"] == "Wie lautet die Antwort?"
+    assert data[0]["answer"] == "42."
+    assert data[0]["error"] is None
+    assert data[0]["id"]
+
+
+def test_ask_route_persists_error_when_ollama_fails(app, client, cfg, conn, monkeypatch):
+    _seed_done_video(cfg, conn)
+    monkeypatch.setattr(
+        summary_views.ollama_summarize, "ask",
+        lambda text, question, cfg: SummaryResult(text=None, error="nicht erreichbar"),
+    )
+    captured = {}
+    app.extensions["ytdigest_jobs"].start = (
+        lambda label, func: captured.setdefault("func", func) or True
+    )
+
+    client.post("/transcripts/vid001/ask", data={"question": "Frage?"})
+    captured["func"](None)
+
+    data = json.loads(_questions_json_path(cfg).read_text(encoding="utf-8"))
+    assert data[0]["answer"] is None
+    assert data[0]["error"] == "nicht erreichbar"
+
+
+def test_ask_route_appends_to_existing_question_history(app, client, cfg, conn, monkeypatch):
+    _seed_done_video(cfg, conn)
+    _questions_json_path(cfg).write_text(json.dumps([
+        {"id": "first001", "question": "Erste Frage", "answer": "Erste Antwort",
+         "error": None, "created_at": "2026-01-01T10:00:00+00:00"},
+    ]), encoding="utf-8")
+    monkeypatch.setattr(summary_views.ollama_summarize, "ask",
+                        lambda text, question, cfg: SummaryResult(text="Zweite Antwort"))
+    captured = {}
+    app.extensions["ytdigest_jobs"].start = (
+        lambda label, func: captured.setdefault("func", func) or True
+    )
+
+    client.post("/transcripts/vid001/ask", data={"question": "Zweite Frage"})
+    captured["func"](None)
+
+    data = json.loads(_questions_json_path(cfg).read_text(encoding="utf-8"))
+    assert [e["question"] for e in data] == ["Erste Frage", "Zweite Frage"]
+
+
+def test_transcript_detail_shows_saved_questions(client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    _questions_json_path(cfg).write_text(json.dumps([
+        {"id": "abc12345", "question": "Worum geht es?", "answer": "Um die Sache.",
+         "error": None, "created_at": "2026-01-02T10:00:00+00:00"},
+    ]), encoding="utf-8")
+
+    resp = client.get("/transcripts/vid001")
+    assert resp.status_code == 200
+    assert b"Worum geht es?" in resp.data
+    assert b"Um die Sache." in resp.data
+    assert b"/transcripts/vid001/questions/abc12345/delete" in resp.data
+
+
+def test_transcript_detail_shows_failed_question_error(client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    _questions_json_path(cfg).write_text(json.dumps([
+        {"id": "abc12345", "question": "Wer?", "answer": None,
+         "error": "Ollama nicht erreichbar", "created_at": "2026-01-02T10:00:00+00:00"},
+    ]), encoding="utf-8")
+
+    resp = client.get("/transcripts/vid001")
+    assert resp.status_code == 200
+    assert b"Fehlgeschlagen: Ollama nicht erreichbar" in resp.data
+
+
+def test_delete_question_removes_only_targeted_entry(client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    _questions_json_path(cfg).write_text(json.dumps([
+        {"id": "keep0001", "question": "Bleibt", "answer": "ok",
+         "error": None, "created_at": "2026-01-02T10:00:00+00:00"},
+        {"id": "gone0001", "question": "Weg", "answer": "ok",
+         "error": None, "created_at": "2026-01-02T11:00:00+00:00"},
+    ]), encoding="utf-8")
+
+    resp = client.post("/transcripts/vid001/questions/gone0001/delete", follow_redirects=True)
+    assert resp.status_code == 200
+
+    data = json.loads(_questions_json_path(cfg).read_text(encoding="utf-8"))
+    assert [e["id"] for e in data] == ["keep0001"]
+
+
+def test_delete_question_unknown_id_returns_404(client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    resp = client.post("/transcripts/vid001/questions/doesnotexist/delete")
+    assert resp.status_code == 404
+
+
+def test_delete_question_404_for_unknown_video(client):
+    resp = client.post("/transcripts/does-not-exist/questions/abc12345/delete")
+    assert resp.status_code == 404

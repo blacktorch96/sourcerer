@@ -6,19 +6,24 @@ oder grundlegend geändert werden. Zum Entfernen genügt:
   - diese Datei löschen
   - ihre Registrierung in app.py streichen
   - sources/ollama_summarize.py löschen
-  - den 'summary'-Import + die Fallunterscheidung in transcripts_views.py
-    (detail()) und transcript_detail.html auf den ursprünglichen
-    'Zusammenfassung erstellen'-Button zurücksetzen
+  - die 'get_summary_state'/'get_questions'-Importe + die Fallunterscheidung
+    in transcripts_views.py (detail()) und transcript_detail.html auf den
+    ursprünglichen 'Zusammenfassung erstellen'-Button zurücksetzen
   - den [summary]-Abschnitt in config.py entfernen
+  - die .questions.json-Dateien im output_dir sind reine Nebenprodukte
+    (eine je Transkript mit gestellten Fragen) und können mit gelöscht werden
 """
 
 from __future__ import annotations
 
+import json
 import logging
-from dataclasses import dataclass
+import uuid
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
-from flask import Blueprint, abort, jsonify, request
+from flask import Blueprint, abort, jsonify, redirect, request, url_for
 
 from ytdigest.config import Config
 from ytdigest.db.repo import Repo
@@ -68,6 +73,50 @@ def get_summary_state(transcript_path: str | None) -> SummaryState:
         return SummaryState(error=error_abs.read_text(encoding="utf-8"))
 
     return SummaryState()
+
+
+@dataclass(slots=True)
+class QaEntry:
+    """Eine gespeicherte Frage+Antwort zu einem Transkript - liegt als JSON
+    neben der .txt/.summary.md (siehe _questions_path), damit eine einmal
+    gestellte Frage beim erneuten Ansehen nicht neu ans LLM muss und sich
+    gezielt löschen lässt."""
+
+    id: str
+    question: str
+    answer: str | None = None
+    error: str | None = None
+    created_at: str = ""
+
+
+def _questions_path(transcript_rel: str) -> Path:
+    return Path(transcript_rel).with_suffix(".questions.json")
+
+
+def _load_questions(output_dir: Path, transcript_rel: str) -> list[QaEntry]:
+    path = _resolve_existing(output_dir, _questions_path(transcript_rel))
+    if path is None:
+        return []
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return [QaEntry(**item) for item in raw]
+
+
+def _save_questions(output_dir: Path, transcript_rel: str, entries: list[QaEntry]) -> None:
+    abs_path = output_dir / _questions_path(transcript_rel)
+    abs_path.parent.mkdir(parents=True, exist_ok=True)
+    abs_path.write_text(
+        json.dumps([asdict(e) for e in entries], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def get_questions(transcript_path: str | None) -> list[QaEntry]:
+    """Für die Detailseite: gespeicherte Fragen+Antworten, älteste zuerst
+    (das Template dreht für die Anzeige auf neueste zuerst um)."""
+    if not transcript_path:
+        return []
+    output_dir = get_cfg().paths.output_dir.resolve()
+    return _load_questions(output_dir, transcript_path)
 
 
 def _done_video_with_transcript(cfg: Config, video_id: str) -> tuple[Video, Path]:
@@ -122,20 +171,33 @@ def summarize(video_id: str):
 
 @bp.post("/<path:video_id>/ask")
 def ask(video_id: str):
-    """Freie Frage zum Transkript - Antwort wird nicht abgelegt, sondern nur
-    live übers Job-Log angezeigt (keine Historie, jede Frage ist für sich
-    genommen, immer neu auf Basis des ganzen Transkripts beantwortet)."""
+    """Freie Frage zum Transkript - Antwort landet dauerhaft in der
+    .questions.json neben dem Transkript (siehe QaEntry) und erscheint nach
+    dem automatischen Reload (job-form, data-reload Standard) in der
+    Fragenliste auf der Detailseite; das Job-Log zeigt nur den Fortschritt
+    während die Antwort generiert wird."""
     cfg = get_cfg()
     question = (request.form.get("question") or "").strip()
     if not question:
         return jsonify(ok=False, error="Bitte eine Frage eingeben."), 400
 
     video, transcript_abs = _done_video_with_transcript(cfg, video_id)
+    output_dir = cfg.paths.output_dir.resolve()
 
     def job(_pipeline):
         text = transcript_abs.read_text(encoding="utf-8")
         log.info("Frage: %s", question)
         result = ollama_summarize.ask(text, question, cfg=cfg.summary)
+        entry = QaEntry(
+            id=uuid.uuid4().hex[:8],
+            question=question,
+            answer=result.text.strip() if result.text else None,
+            error=None if result.text else (result.error or "unbekannter Fehler"),
+            created_at=datetime.now(UTC).isoformat(timespec="seconds"),
+        )
+        entries = _load_questions(output_dir, video.transcript_path)
+        entries.append(entry)
+        _save_questions(output_dir, video.transcript_path, entries)
         if result.text:
             log.info("Antwort: %s", result.text)
         else:
@@ -147,3 +209,18 @@ def ask(video_id: str):
     if not started:
         return jsonify(ok=False, error=f"Läuft schon: {jobs.label}"), 409
     return jsonify(ok=True)
+
+
+@bp.post("/<path:video_id>/questions/<question_id>/delete")
+def delete_question(video_id: str, question_id: str):
+    """Einzelne gespeicherte Frage löschen - reine Dateioperation, kein Job
+    (keine Regenerierung nötig, siehe QaEntry-Doc)."""
+    cfg = get_cfg()
+    video, _transcript_abs = _done_video_with_transcript(cfg, video_id)
+    output_dir = cfg.paths.output_dir.resolve()
+    entries = _load_questions(output_dir, video.transcript_path)
+    remaining = [e for e in entries if e.id != question_id]
+    if len(remaining) == len(entries):
+        abort(404)
+    _save_questions(output_dir, video.transcript_path, remaining)
+    return redirect(url_for("transcripts.detail", video_id=video_id))

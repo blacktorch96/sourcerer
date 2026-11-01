@@ -34,19 +34,47 @@
     </form>
   </div>
 
-  <h2>Frage zum Transkript</h2>
-  <div class="card">
-    <form class="job-form ask-form" method="post" data-reload="false"
-          action="{{ url_for('summary.ask', video_id=video.video_id) }}">
-      <textarea name="question" rows="2" required
-                placeholder="z. B. Welche Tools wurden erwähnt?"></textarea>
-      <button type="submit" {{ 'disabled' if jobs.running else '' }}>Frage stellen</button>
-    </form>
-  </div>
+  <details class="qa-section" {{ 'open' if questions else '' }}>
+    <summary><span aria-hidden="true">❓</span> Frage zum Transkript
+      {% if questions %}<span class="muted">({{ questions|length }})</span>{% endif %}
+    </summary>
 
-  <div class="card">
-    {% include "_joblog.html" %}
-  </div>
+    <div class="card">
+      {% if questions %}
+        <ul class="qa-list">
+          {% for q in questions|reverse %}
+            <li>
+              <details class="qa-entry" {{ 'open' if loop.first else '' }}>
+                <summary>
+                  <span class="qa-question">{{ q.question }}</span>
+                  <span class="qa-date muted">{{ q.created_at[:10] }}</span>
+                </summary>
+                {% if q.answer %}
+                  <div class="qa-answer">{{ q.answer }}</div>
+                {% elif q.error %}
+                  <p class="text-danger">Fehlgeschlagen: {{ q.error }}</p>
+                {% endif %}
+                <form method="post" class="qa-delete-form"
+                      action="{{ url_for('summary.delete_question', video_id=video.video_id, question_id=q.id) }}"
+                      onsubmit="return confirm('Frage löschen?');">
+                  <button type="submit" class="qa-delete">Löschen</button>
+                </form>
+              </details>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      <form class="job-form ask-form" method="post"
+            action="{{ url_for('summary.ask', video_id=video.video_id) }}">
+        <textarea name="question" rows="2" required
+                  placeholder="z. B. Welche Tools wurden erwähnt?"></textarea>
+        <button type="submit" {{ 'disabled' if jobs.running else '' }}>Frage stellen</button>
+      </form>
+
+      {% include "_joblog.html" %}
+    </div>
+  </details>
 
   <h2>Transkript</h2>
   <div class="card transcript-text">
