@@ -223,6 +223,54 @@ def test_dashboard_inbox_caps_at_limit_and_notes_remainder(client, cfg, conn):
     assert b"5 weitere" in resp.data
 
 
+def test_dashboard_inbox_dismiss_button_present_for_pending_video(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    Repo(conn).add_video(
+        FeedEntry("vid002", "Noch offen", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid002"),
+        feed.id, status="discovered",
+    )
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"/transcripts/vid002/dismiss" in resp.data
+
+
+def test_transcripts_dismiss_marks_video_as_skipped_without_processing(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    Repo(conn).add_video(
+        FeedEntry("vid002", "Noch offen", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid002"),
+        feed.id, status="discovered",
+    )
+    resp = client.post("/transcripts/vid002/dismiss", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"als gelesen markiert" in resp.data
+
+    video = Repo(conn).get_video("vid002")
+    assert video.status == "skipped"
+    assert video.skip_reason == "dismissed"
+
+
+def test_transcripts_dismiss_unknown_video_returns_404(client, cfg, conn):
+    resp = client.post("/transcripts/does-not-exist/dismiss")
+    assert resp.status_code == 404
+
+
+def test_dashboard_inbox_hides_dismissed_video(client, cfg, conn):
+    feed = _seed_feed_with_done_video(cfg, conn)
+    Repo(conn).add_video(
+        FeedEntry("vid002", "Erledigtes Video", datetime(2026, 1, 2, tzinfo=UTC),
+                 "https://youtube.com/watch?v=vid002"),
+        feed.id, status="discovered",
+    )
+    client.post("/transcripts/vid002/dismiss", follow_redirects=True)
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"Erledigtes Video" not in resp.data
+    assert b"Nichts zu verarbeiten" in resp.data
+
+
 def test_dashboard_hides_feed_health_banner_when_no_errors(client, cfg, conn):
     _seed_feed_with_done_video(cfg, conn)
     resp = client.get("/")

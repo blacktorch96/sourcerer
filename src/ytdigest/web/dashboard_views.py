@@ -27,7 +27,8 @@ def index():
         counts = repo.counts_by_status()
         errors = repo.recent_errors(10)
         recent_done = repo.recent_done(10)
-        pending = repo.list_videos(statuses=_PENDING_STATUSES)
+        pending = [v for v in repo.list_videos(statuses=_PENDING_STATUSES)
+                  if v.skip_reason != "dismissed"]
         feeds_by_id = {f.id: f for f in repo.list_feeds()}
     finally:
         conn.close()

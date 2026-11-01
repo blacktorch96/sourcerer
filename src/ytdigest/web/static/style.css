@@ -376,6 +376,8 @@ button.status-icon { cursor: pointer; }
 button.status-icon:hover { filter: brightness(0.92); }
 button.status-icon:disabled { cursor: not-allowed; }
 .status-icon-form { margin: 0; }
+.status-icon-group { display: inline-flex; align-items: center; gap: 6px; }
+.status-icon-group form { margin: 0; }
 
 .transcript-text {
   font-size: 1em;

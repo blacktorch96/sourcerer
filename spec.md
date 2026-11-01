@@ -200,7 +200,7 @@ CREATE TABLE videos (
     word_count      INTEGER,
     attempts        INTEGER NOT NULL DEFAULT 0,
     last_error      TEXT,
-    skip_reason     TEXT,               -- too_short | initial_sync | filtered
+    skip_reason     TEXT,               -- too_short | initial_sync | filtered | dismissed
     next_retry_at   TEXT,
     first_seen_at   TEXT    NOT NULL,
     processed_at    TEXT,

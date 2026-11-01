@@ -23,6 +23,20 @@
 </form>
 {% endmacro %}
 
+{% macro dismiss_icon(video_id) %}
+<form method="post" action="{{ url_for('transcripts.dismiss', video_id=video_id) }}">
+  <button type="submit" class="status-icon tone-neutral"
+          title="Als gelesen markieren (nicht herunterladen)"
+          aria-label="Als gelesen markieren, ohne herunterzuladen">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M18 6 6 18"/>
+      <path d="M6 6l12 12"/>
+    </svg>
+  </button>
+</form>
+{% endmacro %}
+
 {% macro too_short_icon(video_id, disabled) %}
 <form class="job-form status-icon-form" method="post"
       action="{{ url_for('transcripts.process', video_id=video_id) }}">

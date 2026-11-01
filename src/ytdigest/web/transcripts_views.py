@@ -5,7 +5,17 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from flask import Blueprint, abort, jsonify, render_template, request, send_file
+from flask import (
+    Blueprint,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
 from markupsafe import Markup, escape
 
 from ytdigest.db.repo import Repo
@@ -284,3 +294,23 @@ def process(video_id: str):
     if not started:
         return jsonify(ok=False, error=f"Läuft schon: {jobs.label}"), 409
     return jsonify(ok=True)
+
+
+@bp.post("/<path:video_id>/dismiss")
+def dismiss(video_id: str):
+    """Inbox: Video ohne Herunterladen/Transkribieren als erledigt markieren
+    (z. B. kein Interesse am Inhalt). Landet als skipped/dismissed - taucht
+    in der Inbox nicht mehr auf, bleibt aber über 'Retry' je Feed erreichbar,
+    falls man es sich anders überlegt (requeue_skipped() läuft nur über den
+    pipeline-eigenen Grund 'initial_sync', lässt 'dismissed' also in Ruhe)."""
+    conn = connect(get_cfg().paths.database)
+    try:
+        repo = Repo(conn)
+        video = repo.get_video(video_id)
+        if video is None:
+            abort(404)
+        repo.skip_video(video_id, "dismissed")
+    finally:
+        conn.close()
+    flash(f'"{video.title}" als gelesen markiert.', "ok")
+    return redirect(request.referrer or url_for("dashboard.index"))

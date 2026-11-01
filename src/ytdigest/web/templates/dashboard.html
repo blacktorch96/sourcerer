@@ -51,9 +51,12 @@
               <td>{{ feed.name if feed else "—" }}</td>
               <td>{{ video.title }}</td>
               <td>
-                {% if too_short %}{{ icons.too_short_icon(video.video_id, jobs.running) }}
-                {% else %}{{ icons.pending_icon(video.video_id, jobs.running) }}
-                {% endif %}
+                <div class="status-icon-group">
+                  {% if too_short %}{{ icons.too_short_icon(video.video_id, jobs.running) }}
+                  {% else %}{{ icons.pending_icon(video.video_id, jobs.running) }}
+                  {% endif %}
+                  {{ icons.dismiss_icon(video.video_id) }}
+                </div>
               </td>
               <td>{{ video.published_at[:10] }}</td>
             </tr>
