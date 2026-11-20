@@ -203,7 +203,10 @@ ollama_host = "http://<ip-des-hauptrechners>:11434"  # OLLAMA_HOST=0.0.0.0 auf d
 ```
 
 Damit laufen YouTube-/Podcast-ASR und Ollama-Zusammenfassungen transparent
-über den Worker - der Pi selbst braucht kein `--extra asr` und kein GPU.
+über den Hauptrechner - der Pi selbst braucht kein `--extra asr` und kein GPU.
+`summary.ollama_host` darf auch fehlen: ist nur `asr.remote_url` gesetzt, nutzt
+die Zusammenfassung denselben Host mit Port 11434 (Worker und Ollama laufen ja
+auf demselben Rechner). Ein ausdrücklich gesetzter `ollama_host` hat Vorrang.
 
 **Ordner-Feeds ohne Samba/NFS:** ein unter `asr_worker.allowed_roots`
 freigegebener Unterordner lässt sich direkt als Feed eintragen:

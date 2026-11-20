@@ -60,7 +60,9 @@ open_browser = true          # Standardbrowser beim Start von 'web serve' öffne
 [summary]
 # EXPERIMENTELL - lokale Zusammenfassung über Ollama, siehe README "Zusammenfassung"
 enabled     = true
-# ollama_host = "http://<ip-des-gpu-hauptrechners>:11434"  # siehe "Verteilter Betrieb"
+# ollama_host = "http://<ip-des-gpu-hauptrechners>:11434"  # siehe "Verteilter Betrieb";
+#                                                          # nicht gesetzt + asr.remote_url gesetzt
+#                                                          # -> gleicher Host wie der Worker, Port 11434
 model       = "qwen3.5:9b"
 
 [asr_worker]

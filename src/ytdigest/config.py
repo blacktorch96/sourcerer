@@ -9,9 +9,10 @@ from __future__ import annotations
 import os
 import tomllib
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import platformdirs
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 APP_NAME = "ytdigest"
 ENV_PREFIX = "YTDIGEST_"
@@ -166,6 +167,21 @@ class Config(BaseModel):
     summary: SummaryCfg = Field(default_factory=SummaryCfg)
 
     source_path: Path | None = None
+
+    @model_validator(mode="after")
+    def _default_ollama_host_to_asr_worker(self) -> Config:
+        """Im verteilten Betrieb laufen ASR-Worker und Ollama auf demselben
+        GPU-Rechner. Ist nur ``asr.remote_url`` gesetzt und ``summary.ollama_host``
+        nicht ausdrücklich, zeigt die Zusammenfassung sonst auf localhost (den Pi)
+        statt auf den Rechner mit dem Worker - daher dessen Host mit Ollama-Port.
+        Ein explizit gesetzter ``ollama_host`` (auch localhost) bleibt unberührt."""
+        if "ollama_host" in self.summary.model_fields_set or not self.asr.remote_url:
+            return self
+        host = urlsplit(self.asr.remote_url).hostname
+        if host:
+            host = f"[{host}]" if ":" in host else host  # IPv6-Literal
+            self.summary.ollama_host = f"http://{host}:11434"
+        return self
 
 
 def _candidate_paths(explicit: Path | None) -> list[Path]:
