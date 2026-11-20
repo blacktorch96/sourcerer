@@ -294,16 +294,20 @@ def feeds_list() -> None:
 
 @feeds_app.command("backfill")
 def feeds_backfill(
-    channel_id: str = typer.Argument(..., help="Kanal-ID (UC...), muss bereits per "
-                                                "'feeds add' bekannt sein"),
+    channel_id: str = typer.Argument(..., help="Kanal-ID (UC...) bzw. 'playlist:<ID>' (siehe "
+                                                "'feeds list'), muss bereits per 'feeds add' "
+                                                "bekannt sein"),
     days: int = typer.Option(365, "--days", help="wie viele Tage zurück"),
     limit: int | None = typer.Option(None, "--limit", help="max. neu anzulegende Videos"),
     dry_run: bool = typer.Option(False, "--dry-run", help="nur zählen, nichts anlegen"),
 ) -> None:
-    """Ältere Videos eines Kanals jenseits des RSS-Fensters (max. ~15) nachtragen.
+    """Ältere Videos eines Kanals oder einer Playlist jenseits des RSS-Fensters
+    (max. ~15) nachtragen.
 
     Legt sie als 'discovered' an - ein anschließendes 'ytdigest run' verarbeitet
-    sie über die normale Pipeline (Captions, sonst ASR, samt Dauerfilter).
+    sie über die normale Pipeline (Captions, sonst ASR, samt Dauerfilter). Bei
+    Playlists (nicht chronologisch) werden zu alte Videos übersprungen statt den
+    Lauf zu beenden; für die komplette Playlist --days entsprechend hoch setzen.
     """
     conn = _open_db()
     try:
@@ -321,7 +325,8 @@ def feeds_backfill(
 
 @feeds_app.command("add")
 def feeds_add(source: str = typer.Argument(
-                  ..., help="URL, Kanal-ID, @handle oder 'podcast:<RSS-URL>'"),
+                  ..., help="URL, Kanal-ID, @handle, 'podcast:<RSS-URL>' oder "
+                            "Playlist-URL/'playlist:<ID>'"),
               name: str | None = typer.Option(None, "--name", help="Anzeigename")) -> None:
     """Zeile an feeds.txt anhängen und syncen."""
     line = f"{source} | {name}" if name else source

@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from ytdigest.models import ParsedFeedLine
-from ytdigest.sources import local, local_remote
+from ytdigest.sources import local, local_remote, playlist
 
 CHANNEL_ID_RE = re.compile(r"^UC[0-9A-Za-z_-]{22}$")
 _VIDEOS_XML_RE = re.compile(r"youtube\.com/feeds/videos\.xml", re.IGNORECASE)
@@ -14,6 +14,21 @@ _CHANNEL_ID_IN_URL = re.compile(r"[?&]channel_id=(UC[0-9A-Za-z_-]{22})")
 _HANDLE_RE = re.compile(r"^@[\w.-]+$")
 _PODCAST_PREFIX_RE = re.compile(r"^podcast:\s*", re.IGNORECASE)
 _LOCAL_PREFIX_RE = re.compile(r"^local:\s*", re.IGNORECASE)
+_PLAYLIST_PREFIX_RE = re.compile(r"^playlist:\s*", re.IGNORECASE)
+_PLAYLIST_ID_RE = re.compile(r"^[0-9A-Za-z_-]{10,}$")  # PL..., UU..., OLAK5uy_... usw.
+_PLAYLIST_ID_IN_URL = re.compile(r"[?&](?:list|playlist_id)=([0-9A-Za-z_-]+)")
+_PLAYLIST_URL_RE = re.compile(
+    r"youtube\.com/playlist\?|youtube\.com/feeds/videos\.xml\?[^ ]*playlist_id=",
+    re.IGNORECASE,
+)
+
+
+def _playlist_id_from(ref: str) -> str | None:
+    """Playlist-ID aus einer nackten ID oder einer URL mit ``list=``/``playlist_id=``."""
+    if _PLAYLIST_ID_RE.match(ref):
+        return ref
+    match = _PLAYLIST_ID_IN_URL.search(ref)
+    return match.group(1) if match else None
 
 
 def feed_url_for_channel(channel_id: str) -> str:
@@ -47,6 +62,20 @@ def parse_line(raw: str) -> ParsedFeedLine | None:
                                   display_name=display_name)
         return ParsedFeedLine(raw=raw, local_dir=local.parse_local_path(path_str),
                               display_name=display_name)
+
+    if _PLAYLIST_PREFIX_RE.match(line):
+        ref = _PLAYLIST_PREFIX_RE.sub("", line, count=1).strip()
+        playlist_id = _playlist_id_from(ref)
+        if not playlist_id:
+            raise ValueError(f"Playlist-Zeile ohne gültige Playlist-ID/-URL: {raw!r}")
+        return ParsedFeedLine(raw=raw, playlist_id=playlist_id, display_name=display_name)
+
+    # vor dem videos.xml-Zweig: dessen playlist_id-Variante hat keine Kanal-ID
+    if _PLAYLIST_URL_RE.search(line):
+        playlist_id = _playlist_id_from(line)
+        if not playlist_id:
+            raise ValueError(f"Playlist-URL ohne list=-Parameter: {raw!r}")
+        return ParsedFeedLine(raw=raw, playlist_id=playlist_id, display_name=display_name)
 
     if _VIDEOS_XML_RE.search(line):
         match = _CHANNEL_ID_IN_URL.search(line)
@@ -96,6 +125,8 @@ def _line_matches_feed(parsed: ParsedFeedLine, feed) -> bool:
         return feed.feed_url == local.feed_url_for(parsed.local_dir)
     if parsed.local_remote_url:
         return feed.feed_url == local_remote.feed_url_for(parsed.local_remote_url)
+    if parsed.playlist_id:
+        return feed.channel_id == playlist.channel_id_for(parsed.playlist_id)
     if feed.resolved_from:
         return parsed.handle == feed.resolved_from
     if parsed.podcast_url:
@@ -136,7 +167,7 @@ def parse_feeds_file(path: Path) -> list[ParsedFeedLine]:
         if parsed is None:
             continue
         key = (parsed.feed_url or parsed.channel_id or parsed.handle
-               or parsed.podcast_url
+               or parsed.podcast_url or parsed.playlist_id
                or (str(parsed.local_dir) if parsed.local_dir else None)
                or parsed.local_remote_url
                or parsed.raw)

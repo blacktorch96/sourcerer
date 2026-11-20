@@ -56,6 +56,69 @@ def test_podcast_prefix_case_insensitive_and_needs_url():
         parse_line("podcast:")
 
 
+_PLAYLIST_ID = "PLhixgUqwRTjydCoQW1kwA9llrNNy-zLQG"
+
+
+def test_playlist_url_parsed():
+    parsed = parse_line(f"https://www.youtube.com/playlist?list={_PLAYLIST_ID} | CPU")
+    assert parsed.playlist_id == _PLAYLIST_ID
+    assert parsed.display_name == "CPU"
+    assert parsed.channel_id is None
+    assert parsed.handle is None
+
+
+def test_playlist_url_with_extra_params_parsed():
+    parsed = parse_line(f"https://www.youtube.com/playlist?foo=1&list={_PLAYLIST_ID}&bar=2")
+    assert parsed.playlist_id == _PLAYLIST_ID
+
+
+def test_playlist_prefix_with_bare_id_and_with_url():
+    assert parse_line(f"playlist:{_PLAYLIST_ID}").playlist_id == _PLAYLIST_ID
+    assert parse_line(
+        f"PLAYLIST: https://www.youtube.com/playlist?list={_PLAYLIST_ID}"
+    ).playlist_id == _PLAYLIST_ID
+
+
+def test_playlist_prefix_needs_valid_reference():
+    with pytest.raises(ValueError):
+        parse_line("playlist:")
+    with pytest.raises(ValueError):
+        parse_line("playlist:kurz")
+
+
+def test_playlist_videos_xml_url_is_playlist_not_channel():
+    parsed = parse_line(f"https://www.youtube.com/feeds/videos.xml?playlist_id={_PLAYLIST_ID}")
+    assert parsed.playlist_id == _PLAYLIST_ID
+    assert parsed.feed_url is None
+    assert parsed.channel_id is None
+
+
+def test_remove_line_removes_matching_playlist_feed(tmp_path):
+    from ytdigest.models import Feed
+    from ytdigest.sources import playlist
+
+    f = tmp_path / "feeds.txt"
+    f.write_text(f"https://www.youtube.com/playlist?list={_PLAYLIST_ID} | CPU\n@other\n",
+                 encoding="utf-8")
+    feed = Feed(id=1, channel_id=playlist.channel_id_for(_PLAYLIST_ID),
+               feed_url=playlist.feed_url_for(_PLAYLIST_ID), dir_slug="cpu")
+
+    assert remove_line(f, feed) is True
+    text = f.read_text(encoding="utf-8")
+    assert "playlist" not in text
+    assert "@other" in text
+
+
+def test_playlist_lines_dedupe_across_forms(tmp_path):
+    f = tmp_path / "feeds.txt"
+    f.write_text(
+        f"playlist:{_PLAYLIST_ID}\n"
+        f"playlist:{_PLAYLIST_ID}\n",
+        encoding="utf-8",
+    )
+    assert len(parse_feeds_file(f)) == 1
+
+
 def test_local_prefix_parsed_posix_path():
     parsed = parse_line("local:/home/me/aufnahmen | Meine Aufnahmen")
     assert parsed.local_dir == Path("/home/me/aufnahmen")

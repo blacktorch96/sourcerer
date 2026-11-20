@@ -103,6 +103,40 @@ local:C:\Users\me\Aufnahmen
 - Entfällt die `local:`-Zeile aus `feeds.txt`, wird der Feed wie jeder
   andere auch deaktiviert (`is_active = 0`), nicht gelöscht.
 
+## YouTube-Playlists
+
+Auch eine öffentliche (oder nicht gelistete) YouTube-Playlist lässt sich wie ein
+Kanal als Feed eintragen - als Playlist-URL oder mit `playlist:`-Präfix:
+
+```
+https://www.youtube.com/playlist?list=PLhixgUqwRTjydCoQW1kwA9llrNNy-zLQG | CPU Vulnerabilities
+playlist:PLhixgUqwRTjydCoQW1kwA9llrNNy-zLQG
+```
+
+```bash
+uv run ytdigest feeds add "https://www.youtube.com/playlist?list=PLhixgUqwRTjydCoQW1kwA9llrNNy-zLQG"
+```
+
+- **Sync:** zuerst der RSS-Feed der Playlist (wie bei Kanälen nur ~15 Einträge).
+  Ist mindestens ein dort gelistetes Video schon bekannt, reicht dieser einfache
+  Abgleich. Sind dagegen **alle** RSS-Einträge noch unbekannt (Erstimport oder
+  mehr neue Videos seit dem letzten Sync, als der Feed fasst), wird zusätzlich
+  die komplette Playlist per yt-dlp geprüft und alles Fehlende nachgetragen
+  (je Video ein Metadatenabruf für das Datum - bei langen Playlists dauert der
+  Erstimport entsprechend). Nicht mehr abrufbare Einträge (privat/gelöscht)
+  werden übersprungen. Schlägt die Gesamtprüfung fehl, wird nichts übernommen,
+  der Fehler steht beim Feed (`playlist_list: ...`) und der nächste Sync
+  versucht es erneut.
+- **Erstimport-Verhalten** richtet sich wie bei Kanälen nach `--initial-mode`
+  (Standard `latest`: nur das neueste geeignete Video wird verarbeitet, der
+  Rest als `skipped`/`initial_sync` vorgemerkt).
+- **Alles nachtragen:** `uv run ytdigest feeds backfill "playlist:<ID>" --days 99999`
+  legt alle noch unbekannten Videos der Playlist als `discovered` an (die
+  Kanal-ID-Spalte in `feeds list` zeigt `playlist:<ID>`; in der Web-Oberfläche
+  der Backfill-Button beim Feed). Playlists sind nicht chronologisch, `--days`
+  überspringt daher nur zu alte Videos, statt den Lauf zu beenden.
+- Die Videos laufen danach über die normale YouTube-Pipeline (Captions, sonst ASR).
+
 ## Podcasts
 
 Neben YouTube-Kanälen kann `feeds.txt` auch normale Podcast-RSS-Feeds

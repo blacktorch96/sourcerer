@@ -5,7 +5,7 @@
 
   <div class="card">
     <form class="add-feed" method="post" action="{{ url_for('feeds.add') }}">
-      <input type="text" name="source" placeholder="URL, Kanal-ID, @handle oder podcast:<RSS-URL>" required>
+      <input type="text" name="source" placeholder="URL, Kanal-ID, @handle, podcast:<RSS-URL> oder Playlist-URL" required>
       <input type="text" name="name" placeholder="Anzeigename (optional)">
       <button type="submit">Hinzufügen</button>
     </form>

@@ -21,7 +21,7 @@ from ytdigest.feeds.podcast_fetcher import fetch_podcast_feed
 from ytdigest.gdrive import DriveUploader, GDriveUnavailable
 from ytdigest.models import Feed, FeedEntry, RunReport, Video
 from ytdigest.naming import slugify
-from ytdigest.sources import asr, captions, channel, local, local_remote, podcast
+from ytdigest.sources import asr, captions, channel, local, local_remote, playlist, podcast
 from ytdigest.storage import write_transcript
 
 log = logging.getLogger(__name__)
@@ -29,6 +29,8 @@ log = logging.getLogger(__name__)
 INITIAL_MODES = ("latest", "backfill", "mark-seen")
 _BACKFILL_MAX = 15
 _LATEST_PROBE_MAX = 5
+# so listet yt-dlp nicht mehr abrufbare Playlist-Einträge - ein Probe wäre sinnlos
+_UNAVAILABLE_TITLES = frozenset({"[Private video]", "[Deleted video]"})
 
 
 @dataclass(slots=True)
@@ -107,7 +109,10 @@ class Pipeline:
         zuerst) durch, überspringt bereits bekannte Videos und holt für den
         Rest je einzeln das Upload-Datum per vollem Probe nach - die flache
         Liste selbst liefert kein Datum. Bricht ab, sobald ein Kandidat älter
-        als ``days`` Tage ist (Kanal-Tab ist chronologisch sortiert)."""
+        als ``days`` Tage ist (Kanal-Tab ist chronologisch sortiert).
+
+        Für Playlist-Feeds (``playlist:<id>``) gilt dasselbe mit der Playlist
+        statt der Upload-Liste, siehe ``_backfill_playlist``."""
         report = RunReport()
         started = time.monotonic()
 
@@ -118,6 +123,12 @@ class Pipeline:
             )
 
         cutoff = _now() - timedelta(days=days)
+        if playlist.is_playlist_feed(channel_id):
+            self._backfill_playlist(feed, cutoff=cutoff, limit=limit, dry_run=dry_run,
+                                    report=report)
+            report.runtime_s = time.monotonic() - started
+            return report
+
         uploads = channel.list_uploads(channel_id)
         log.info("%d Video(s) insgesamt im Kanal %s gefunden", len(uploads), feed.name)
 
@@ -154,6 +165,83 @@ class Pipeline:
 
         report.runtime_s = time.monotonic() - started
         return report
+
+    def _backfill_playlist(self, feed: Feed, *, cutoff: datetime, limit: int | None,
+                           dry_run: bool, report: RunReport) -> None:
+        """Playlist-Pendant zur Kanal-Schleife in ``backfill_channel``. Eine
+        Playlist ist nicht chronologisch sortiert - ein zu altes Video beendet
+        den Lauf daher nicht, es wird nur übersprungen."""
+        listed = channel.list_playlist_videos(playlist.playlist_id_of(feed.channel_id))
+        log.info("%d Video(s) insgesamt in der Playlist %s gefunden", len(listed), feed.name)
+
+        for item in listed:
+            if limit is not None and report.new_videos >= limit:
+                break
+            video_id = item["video_id"]
+            if self.repo.video_exists(video_id) or item["title"] in _UNAVAILABLE_TITLES:
+                continue
+            entry = self._probe_entry(video_id, item["title"])
+            if entry is None:
+                continue
+            if entry.published_at < cutoff:
+                log.debug("Älter als der Cutoff, überspringe: %s", video_id)
+                continue
+            if not dry_run:
+                self.repo.add_video(entry, feed.id, status="discovered",
+                                    duration_s=entry.duration_s)
+            report.new_videos += 1
+            time.sleep(self.cfg.feeds.delay_between_s)
+
+    def _probe_entry(self, video_id: str, title: str) -> FeedEntry | None:
+        """Datum und Dauer eines Videos aus der flachen Playlist-Liste (die
+        selbst keine Daten liefert) per yt-dlp-Probe nachholen; None, wenn das
+        Video nicht abrufbar ist (privat/gelöscht/geoblockt)."""
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        meta = captions.probe(url)
+        if meta.error:
+            log.warning("Playlist-Probe %s: %s", video_id, meta.error)
+            return None
+        upload_date = meta.info.get("upload_date")
+        if not upload_date:
+            log.warning("Kein Upload-Datum für %s, überspringe", video_id)
+            return None
+        return FeedEntry(
+            video_id=video_id, title=title or video_id, url=url,
+            published_at=datetime.strptime(upload_date, "%Y%m%d").replace(tzinfo=UTC),
+            duration_s=meta.duration_s,
+        )
+
+    def _expand_playlist_entries(self, feed: Feed, playlist_id: str,
+                                 rss_entries: list[FeedEntry]) -> list[FeedEntry]:
+        """RSS-Einträge einer Playlist, bei Bedarf um die komplette Liste ergänzt.
+
+        Normalfall: mindestens ein RSS-Eintrag ist schon bekannt - dann reicht
+        der einfache Abgleich mit dem RSS-Feed. Sind dagegen alle RSS-Einträge
+        noch unbekannt (Erstimport oder mehr neue Videos seit dem letzten Sync,
+        als das RSS-Fenster fasst), kann es darüber hinaus Lücken geben: dann
+        wird die komplette Playlist per yt-dlp geprüft und alles Unbekannte
+        (je per Probe mit Datum) zusätzlich geliefert. Wirft bei yt-dlp-Fehlern."""
+        if not rss_entries or any(self.repo.video_exists(e.video_id) for e in rss_entries):
+            return rss_entries
+
+        listed = channel.list_playlist_videos(playlist_id)
+        rss_ids = {e.video_id for e in rss_entries}
+        todo = [item for item in listed
+                if item["video_id"] not in rss_ids
+                and item["title"] not in _UNAVAILABLE_TITLES
+                and not self.repo.video_exists(item["video_id"])]
+        log.info("Playlist %s: alle %d RSS-Einträge unbekannt - Gesamtliste geprüft, "
+                 "%d weitere Video(s) von %d", feed.name, len(rss_entries), len(todo),
+                 len(listed))
+
+        extras: list[FeedEntry] = []
+        for i, item in enumerate(todo):
+            entry = self._probe_entry(item["video_id"], item["title"])
+            if entry is not None:
+                extras.append(entry)
+            if i < len(todo) - 1:
+                time.sleep(self.cfg.feeds.delay_between_s)
+        return rss_entries + extras
 
     def local_sync(self, channel_dirs: list[Path], report: RunReport) -> None:
         cfg_local = self.cfg.local
@@ -293,6 +381,9 @@ class Pipeline:
                 if line.podcast_url:
                     channel_id = podcast.channel_id_for(line.podcast_url)
                     feed_url = line.podcast_url
+                elif line.playlist_id:
+                    channel_id = playlist.channel_id_for(line.playlist_id)
+                    feed_url = playlist.feed_url_for(line.playlist_id)
                 else:
                     channel_id, feed_url = self._resolve_source(line, timeout)
             except Exception as exc:  # noqa: BLE001
@@ -336,7 +427,22 @@ class Pipeline:
                 feed.channel_title = fetch.channel_title
 
             is_first_run = feed.last_checked_at is None
-            new_count = self._ingest_entries(feed, fetch.entries, opts, is_first_run)
+            entries = fetch.entries
+            if line.playlist_id:
+                # ein noch leerer Playlist-Feed (z. B. Erstimport an yt-dlp
+                # gescheitert, siehe unten) gilt weiter als Erstlauf
+                is_first_run = (is_first_run
+                                or not self.repo.video_counts_per_feed().get(feed.id))
+                try:
+                    entries = self._expand_playlist_entries(feed, line.playlist_id, entries)
+                except Exception as exc:  # noqa: BLE001 - kein Playlist-Fehler beendet den Sync
+                    log.warning("Playlist-Gesamtliste %s: %s", feed.name, exc)
+                    # nichts übernehmen (auch die RSS-Einträge nicht): beim nächsten
+                    # Sync sind sie weiter unbekannt und lösen die Gesamtprüfung erneut aus
+                    self.repo.set_feed_error(feed.id, f"playlist_list: {str(exc)[:200]}")
+                    report.feeds_failed += 1
+                    continue
+            new_count = self._ingest_entries(feed, entries, opts, is_first_run)
             report.new_videos += new_count
 
             self.repo.mark_feed_checked(

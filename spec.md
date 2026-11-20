@@ -99,6 +99,7 @@ Akzeptierte Formen je Zeile:
 | Vollständige `videos.xml`-URL | direkt übernehmen |
 | Kanal-ID (`UC…`, 24 Zeichen) | zur Feed-URL expandieren |
 | `@handle` oder Kanal-URL | einmalig zur Kanal-ID auflösen, Ergebnis in DB cachen |
+| Playlist-URL (`…/playlist?list=PL…`) oder `playlist:<ID>` | Playlist als Feed, `channel_id = playlist:<ID>`; RSS (`videos.xml?playlist_id=`), bei lauter unbekannten RSS-Einträgen zusätzlich die komplette Liste per yt-dlp |
 
 Die Auflösung von `@handle` zur `UC`-ID erfolgt genau einmal pro Kanal und wird in
 `feeds.channel_id` persistiert. Bei jedem Lauf erneut aufzulösen wäre unnötiger
