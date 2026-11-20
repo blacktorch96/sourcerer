@@ -81,6 +81,88 @@ def test_update_summary_model_rejects_empty(client, cfg):
     assert cfg.summary.model == "qwen3.5:9b"
 
 
+def test_settings_page_shows_current_prompt(client, cfg):
+    cfg.summary.prompt_template = "Fasse zusammen: {text}"
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert b"Fasse zusammen: {text}" in resp.data
+    # Hinweistext zeigt die Platzhalter wörtlich (Jinja-Escapes im Template)
+    assert b"<code>{text}</code>" in resp.data
+    assert b"<code>{{</code>" in resp.data
+
+
+def test_update_summary_prompt_saves_and_applies_immediately(client, cfg):
+    prompt = "Kurz auf Deutsch (max {max_chars} Zeichen):\r\n\r\n- Stichpunkte\r\n\r\n{text}"
+    resp = client.post("/settings/summary-prompt", data={"prompt": prompt},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    expected = "Kurz auf Deutsch (max {max_chars} Zeichen):\n\n- Stichpunkte\n\n{text}"
+    assert cfg.summary.prompt_template == expected
+
+    # mehrzeilig lesbar in der Datei und beim erneuten Laden identisch
+    import tomllib
+    text = Path(cfg.source_path).read_text(encoding="utf-8")
+    assert '"""' in text
+    assert tomllib.loads(text)["summary"]["prompt_template"] == expected
+
+
+def test_saved_prompt_is_used_for_summaries(client, cfg):
+    from ytdigest.config import Config
+
+    client.post("/settings/summary-prompt", data={"prompt": "Mach daraus {max_chars}: {text}"})
+    import tomllib
+    data = tomllib.loads(Path(cfg.source_path).read_text(encoding="utf-8"))
+    reloaded = Config.model_validate(data)
+    assert reloaded.summary.prompt_template.format(text="T", max_chars=5) == "Mach daraus 5: T"
+
+
+def test_update_summary_prompt_requires_text_placeholder(client, cfg):
+    before = cfg.summary.prompt_template
+    resp = client.post("/settings/summary-prompt", data={"prompt": "Ohne Platzhalter"},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"Platzhalter" in resp.data
+    assert cfg.summary.prompt_template == before
+    assert not cfg.source_path.exists()
+
+
+@pytest.mark.parametrize("prompt", [
+    "{text} und {unbekannt}",
+    "{text} mit { offener Klammer",
+    "{text} und {0}",
+])
+def test_update_summary_prompt_rejects_broken_braces(client, cfg, prompt):
+    before = cfg.summary.prompt_template
+    resp = client.post("/settings/summary-prompt", data={"prompt": prompt},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"geschweifte Klammer" in resp.data
+    assert cfg.summary.prompt_template == before
+
+
+def test_update_summary_prompt_allows_escaped_literal_braces(client, cfg):
+    client.post("/settings/summary-prompt", data={"prompt": 'Antwort als {{"a": 1}}: {text}'})
+    assert cfg.summary.prompt_template == 'Antwort als {{"a": 1}}: {text}'
+
+
+def test_reset_summary_prompt_restores_default_and_drops_key(client, cfg):
+    from ytdigest.config import SummaryCfg
+
+    client.post("/settings/summary-prompt", data={"prompt": "Eigener Prompt {text}"})
+    assert "prompt_template" in Path(cfg.source_path).read_text(encoding="utf-8")
+
+    resp = client.post("/settings/summary-prompt/reset", follow_redirects=True)
+    assert resp.status_code == 200
+    assert cfg.summary.prompt_template == SummaryCfg().prompt_template
+    assert "prompt_template" not in Path(cfg.source_path).read_text(encoding="utf-8")
+
+
+def test_reset_button_only_shown_for_customized_prompt(client, cfg):
+    assert b"Standard wiederherstellen" not in client.get("/settings").data
+    cfg.summary.prompt_template = "Eigener Prompt {text}"
+    assert b"Standard wiederherstellen" in client.get("/settings").data
+
+
 def test_settings_page_shows_dropdown_when_ollama_reachable(client, cfg, monkeypatch):
     monkeypatch.setattr(settings_views.ollama_summarize, "list_models",
                         lambda cfg: ["qwen3.5:9b", "gpt-oss:20b"])

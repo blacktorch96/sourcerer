@@ -275,6 +275,16 @@ form { display: inline-flex; gap: 6px; align-items: center; }
 .ask-form textarea { resize: vertical; }
 .ask-form button { align-self: flex-start; }
 
+.prompt-editor {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
 input, select, button, textarea {
   font: inherit;
   padding: 7px 10px;
