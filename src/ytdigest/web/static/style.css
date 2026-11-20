@@ -275,6 +275,13 @@ form { display: inline-flex; gap: 6px; align-items: center; }
 .ask-form textarea { resize: vertical; }
 .ask-form button { align-self: flex-start; }
 
+/* Formular mit Textfeld + Hinweis: Kinder untereinander statt (wie bei jedem
+   anderen form) nebeneinander */
+.stack-form { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.stack-form p { margin: 0; }
+.stack-form button { align-self: flex-start; }
+.prompt-reset-form { margin-top: 10px; }
+
 .prompt-editor {
   display: block;
   width: 100%;
