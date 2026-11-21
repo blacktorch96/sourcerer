@@ -137,3 +137,13 @@ def test_check_connection_without_key(monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     ok, msg = openrouter.check_connection(OpenRouterCfg())
     assert not ok and "Kein API-Schlüssel" in msg
+
+
+def test_429_error_includes_upstream_detail_and_hint(monkeypatch):
+    monkeypatch.setattr(openrouter.httpx, "post", lambda *a, **k: _Resp(
+        status=429, json_data={"error": {
+            "message": "Provider returned error",
+            "metadata": {"provider_name": "Google AI Studio", "raw": "model is overloaded"}}}))
+    result = openrouter.summarize("T", cfg=SummaryCfg(), or_cfg=_cfg())
+    assert "Google AI Studio" in result.error and "model is overloaded" in result.error
+    assert "Rate-Limit" in result.error

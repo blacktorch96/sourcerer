@@ -26,13 +26,20 @@ def _headers(cfg: OpenRouterCfg) -> dict[str, str]:
 
 
 def _api_error(data: object) -> str | None:
-    """Fehlertext aus ``{"error": {"message": ...}}`` (OpenRouter liefert
-    solche Antworten auch mit HTTP 200)."""
+    """Fehlertext aus ``{"error": {"message": ..., "metadata": {...}}}``
+    (OpenRouter liefert solche Antworten auch mit HTTP 200). Bei "Provider
+    returned error" steckt die eigentliche Ursache in metadata.raw."""
     if isinstance(data, dict) and data.get("error"):
         err = data["error"]
-        if isinstance(err, dict):
-            return str(err.get("message") or err)
-        return str(err)
+        if not isinstance(err, dict):
+            return str(err)
+        msg = str(err.get("message") or err)
+        meta = err.get("metadata")
+        if isinstance(meta, dict):
+            extra = " ".join(str(meta[k])[:300] for k in ("provider_name", "raw") if meta.get(k))
+            if extra:
+                msg += f" ({extra})"
+        return msg
     return None
 
 
@@ -56,6 +63,9 @@ def _generate(prompt: str, *, cfg: OpenRouterCfg) -> SummaryResult:
         data = None
     if resp.status_code >= 400 or _api_error(data):
         detail = _api_error(data) or resp.text[:200]
+        if resp.status_code == 429:
+            detail += (" - Rate-Limit: bei kostenlosen (:free) Modellen oft ausgelastet; "
+                       "später erneut versuchen oder ein bezahltes Modell wählen")
         return SummaryResult(
             text=None,
             error=f"OpenRouter-Fehler (HTTP {resp.status_code}, Modell {cfg.model}): {detail}",
