@@ -81,6 +81,24 @@ def test_update_summary_model_rejects_empty(client, cfg):
     assert cfg.summary.model == "qwen3.5:9b"
 
 
+def test_update_summary_max_chars_saves_and_applies_immediately(client, cfg):
+    resp = client.post("/settings/summary-max-chars", data={"max_chars": "1500"},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    assert cfg.summary.max_chars == 1500
+    assert "max_chars = 1500" in Path(cfg.source_path).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("value", ["", "abc", "50", "-5"])
+def test_update_summary_max_chars_rejects_invalid(client, cfg, value):
+    before = cfg.summary.max_chars
+    resp = client.post("/settings/summary-max-chars", data={"max_chars": value},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    assert cfg.summary.max_chars == before
+    assert not cfg.source_path.exists()
+
+
 def test_settings_page_shows_current_prompt(client, cfg):
     cfg.summary.prompt_template = "Fasse zusammen: {text}"
     resp = client.get("/settings")

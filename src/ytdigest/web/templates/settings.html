@@ -41,6 +41,19 @@
     {% endif %}
   </div>
 
+  <h2>Länge der Zusammenfassung</h2>
+  <div class="card">
+    <form method="post" action="{{ url_for('settings.update_summary_max_chars') }}">
+      <label for="max_chars">Zielobergrenze</label>
+      <input type="number" id="max_chars" name="max_chars" min="100" step="50"
+             value="{{ cfg.summary.max_chars }}">
+      <span>Zeichen (wird dem Prompt als <code>{{ '{max_chars}' }}</code> übergeben)</span>
+      <button type="submit">Speichern</button>
+    </form>
+    <p class="muted">Nur eine Vorgabe an das Modell, keine harte Kürzung - ein eigener Prompt
+      muss <code>{{ '{max_chars}' }}</code> enthalten, damit sie wirkt.</p>
+  </div>
+
   <h2>Prompt für Zusammenfassungen</h2>
   <div class="card">
     <form class="stack-form" method="post" action="{{ url_for('settings.update_summary_prompt') }}">

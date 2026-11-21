@@ -64,6 +64,20 @@ def update_summary_model():
     return redirect(url_for("settings.index"))
 
 
+@bp.post("/summary-max-chars")
+def update_summary_max_chars():
+    cfg = get_cfg()
+    max_chars = request.form.get("max_chars", type=int)
+    if max_chars is None or max_chars < 100:
+        flash("Ungültige Zeichenzahl - bitte eine ganze Zahl ≥ 100 angeben.", "error")
+        return redirect(url_for("settings.index"))
+
+    config_writer.update_values(_config_path(), {"summary": {"max_chars": max_chars}})
+    cfg.summary.max_chars = max_chars
+    flash(f"Zielobergrenze gespeichert: {max_chars} Zeichen.", "ok")
+    return redirect(url_for("settings.index"))
+
+
 def _prompt_problem(template: str) -> str | None:
     """Fehlertext, wenn ``template`` nicht als Zusammenfassungs-Prompt taugt -
     ollama_summarize.summarize() ruft ``template.format(text=..., max_chars=...)``
