@@ -1,5 +1,6 @@
 """Einstellungsseite: Dauerfilter (filters.min_duration_min) sowie Ollama-Modell
-(summary.model) und Prompt (summary.prompt_template) für die Zusammenfassung.
+(summary.model) und Prompt (summary.prompt_template) für die Zusammenfassung sowie
+die Anbindung an OpenRouter (externer Dienst, Abschnitt [openrouter]).
 
 Schreibt gezielt in config.toml (config_writer.py, kommentarerhaltend) und
 aktualisiert zusätzlich das im Prozess gehaltene Config-Objekt direkt, damit
@@ -15,7 +16,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from ytdigest import config_writer
 from ytdigest.config import SummaryCfg
-from ytdigest.sources import ollama_summarize
+from ytdigest.sources import ollama_summarize, openrouter
 from ytdigest.web.context import get_cfg
 
 bp = Blueprint("settings", __name__, url_prefix="/settings")
@@ -33,6 +34,8 @@ def index():
     return render_template(
         "settings.html", cfg=cfg, ollama_models=ollama_models,
         prompt_is_default=cfg.summary.prompt_template == SummaryCfg().prompt_template,
+        key_in_file=bool(cfg.openrouter.api_key.strip()),
+        key_in_env=bool(cfg.openrouter.resolved_api_key()) and not cfg.openrouter.api_key.strip(),
     )
 
 
@@ -115,4 +118,42 @@ def reset_summary_prompt():
     config_writer.remove_value(_config_path(), "summary", "prompt_template")
     cfg.summary.prompt_template = SummaryCfg().prompt_template
     flash("Prompt auf den Standard zurückgesetzt.", "ok")
+    return redirect(url_for("settings.index"))
+
+
+@bp.post("/openrouter")
+def update_openrouter():
+    """Modell (Pflicht) und - nur wenn ausgefüllt - API-Schlüssel speichern. Das
+    Schlüsselfeld wird nie vorbelegt: leer lassen heißt "unverändert"."""
+    cfg = get_cfg()
+    model = (request.form.get("model") or "").strip()
+    api_key = (request.form.get("api_key") or "").strip()
+    if not model:
+        flash("Bitte ein OpenRouter-Modell angeben (z. B. anthropic/claude-sonnet-4.5).", "error")
+        return redirect(url_for("settings.index"))
+
+    updates: dict[str, object] = {"model": model}
+    if api_key:
+        updates["api_key"] = api_key
+    config_writer.update_values(_config_path(), {"openrouter": updates})
+    cfg.openrouter.model = model
+    if api_key:
+        cfg.openrouter.api_key = api_key
+    flash("OpenRouter-Einstellungen gespeichert.", "ok")
+    return redirect(url_for("settings.index"))
+
+
+@bp.post("/openrouter/remove-key")
+def remove_openrouter_key():
+    cfg = get_cfg()
+    config_writer.remove_value(_config_path(), "openrouter", "api_key")
+    cfg.openrouter.api_key = ""
+    flash("API-Schlüssel aus config.toml entfernt.", "ok")
+    return redirect(url_for("settings.index"))
+
+
+@bp.post("/openrouter/test")
+def test_openrouter():
+    ok, message = openrouter.check_connection(get_cfg().openrouter)
+    flash(message, "ok" if ok else "error")
     return redirect(url_for("settings.index"))

@@ -41,6 +41,43 @@
     {% endif %}
   </div>
 
+  <h2>OpenRouter (extern)</h2>
+  <div class="card">
+    <p class="external-note">
+      Achtung: Bei Aktionen über OpenRouter wird das <strong>Transkript an einen externen
+      Dienst gesendet</strong> (und von dort ggf. an den Modellanbieter). Auf der
+      Transkript-Seite sind diese Buttons deshalb orange markiert.
+    </p>
+    <form class="stack-form" method="post" action="{{ url_for('settings.update_openrouter') }}">
+      <label for="or_key">API-Schlüssel
+        {% if key_in_file %}<span class="badge badge-success">in config.toml gespeichert</span>
+        {% elif key_in_env %}<span class="badge badge-info">aus Umgebungsvariable OPENROUTER_API_KEY</span>
+        {% else %}<span class="badge badge-warning">fehlt</span>{% endif %}
+      </label>
+      <input type="password" id="or_key" name="api_key" autocomplete="off"
+             placeholder="{{ 'leer lassen = unverändert' if key_in_file or key_in_env else 'sk-or-...' }}">
+      <label for="or_model">Modell</label>
+      <input type="text" id="or_model" name="model" required autocomplete="off"
+             value="{{ cfg.openrouter.model }}" placeholder="z. B. anthropic/claude-sonnet-4.5">
+      <p class="muted">Modell-ID wie auf <a href="https://openrouter.ai/models" target="_blank"
+        rel="noopener">openrouter.ai/models</a>. Den Schlüssel erzeugst du unter
+        openrouter.ai/keys; er wird im Klartext in der (nicht eingecheckten) config.toml abgelegt
+        und hier nie wieder angezeigt.</p>
+      <button type="submit">Speichern</button>
+    </form>
+    <div class="settings-actions">
+      <form method="post" action="{{ url_for('settings.test_openrouter') }}">
+        <button type="submit">Verbindung testen</button>
+      </form>
+      {% if key_in_file %}
+        <form method="post" action="{{ url_for('settings.remove_openrouter_key') }}"
+              onsubmit="return confirm('API-Schlüssel aus config.toml entfernen?');">
+          <button type="submit" class="danger">Schlüssel entfernen</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
   <h2>Länge der Zusammenfassung</h2>
   <div class="card">
     <form method="post" action="{{ url_for('settings.update_summary_max_chars') }}">

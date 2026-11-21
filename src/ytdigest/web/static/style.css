@@ -275,6 +275,32 @@ form { display: inline-flex; gap: 6px; align-items: center; }
 .ask-form textarea { resize: vertical; }
 .ask-form button { align-self: flex-start; }
 
+/* Aktionen mit zwei Anbietern: lokal (Standard-Button) und extern (orange) */
+.provider-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.provider-actions button { background: var(--accent); color: var(--accent-fg); }
+.provider-actions button:hover { background: var(--accent-hover); }
+.provider-actions button:disabled:hover { background: var(--accent); }
+.provider-actions button.btn-external,
+.btn-external {
+  background: var(--warning-soft);
+  color: var(--warning);
+  border: 1px solid var(--warning);
+}
+.provider-actions button.btn-external:hover { background: var(--warning); color: var(--accent-fg); }
+.provider-actions button.btn-external:disabled:hover { background: var(--warning-soft); color: var(--warning); }
+.external-badge {
+  display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.8em;
+  font-weight: 600; background: var(--warning-soft); color: var(--warning);
+  border: 1px solid var(--warning);
+}
+.external-result { border-left: 4px solid var(--warning); }
+.external-hint { margin: 10px 0 0; font-size: 0.85em; color: var(--warning); }
+.external-note {
+  margin: 0 0 12px; padding: 10px 14px; border-radius: var(--radius-sm);
+  background: var(--warning-soft); color: var(--warning); font-size: 0.92em;
+}
+.settings-actions { display: flex; gap: 8px; margin-top: 10px; }
+
 /* Formular mit Textfeld + Hinweis: Kinder untereinander statt (wie bei jedem
    anderen form) nebeneinander */
 .stack-form { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }

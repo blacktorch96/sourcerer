@@ -16,7 +16,12 @@
 
   <h2>Zusammenfassung</h2>
   {% if summary.text %}
-    <div class="card summary-text">{{ summary.text }}</div>
+    <div class="card summary-text {{ 'external-result' if summary.provider == 'openrouter' else '' }}">
+      {% if summary.provider == 'openrouter' %}
+        <p class="external-badge">☁ Extern erstellt (OpenRouter{{ ', ' ~ summary.model if summary.model }})</p>
+      {% endif %}
+      {{ summary.text }}
+    </div>
   {% elif summary.error %}
     <div class="card">
       <p class="text-danger">Zusammenfassung fehlgeschlagen: {{ summary.error }}</p>
@@ -25,13 +30,29 @@
   <div class="card">
     <form class="job-form" method="post"
           action="{{ url_for('summary.summarize', video_id=video.video_id) }}">
-      <button type="submit" {{ 'disabled' if jobs.running else '' }}>
-        {% if summary.text %}Neu generieren
-        {% elif summary.error %}Erneut versuchen
-        {% else %}Zusammenfassung erstellen
+      <div class="provider-actions">
+        <button type="submit" name="provider" value="ollama" {{ 'disabled' if jobs.running else '' }}>
+          {% if summary.text %}Neu generieren
+          {% elif summary.error %}Erneut versuchen
+          {% else %}Zusammenfassung erstellen
+          {% endif %}
+        </button>
+        {% if openrouter_ready %}
+          <button type="submit" name="provider" value="openrouter" class="btn-external"
+                  title="Das Transkript wird an OpenRouter ({{ openrouter_model }}) gesendet"
+                  {{ 'disabled' if jobs.running else '' }}>
+            ☁ {{ 'Extern neu generieren' if summary.text else 'Extern erstellen' }}
+          </button>
         {% endif %}
-      </button>
+      </div>
     </form>
+    {% if openrouter_ready %}
+      <p class="external-hint">☁ Orange = externe Verarbeitung über OpenRouter
+        ({{ openrouter_model }}): das Transkript verlässt dein Netz.</p>
+    {% else %}
+      <p class="muted"><a href="{{ url_for('settings.index') }}">OpenRouter einrichten</a>
+        für eine Verarbeitung mit externen Modellen.</p>
+    {% endif %}
   </div>
 
   <details class="qa-section" {{ 'open' if questions else '' }}>
@@ -46,6 +67,8 @@
             <li>
               <details class="qa-entry" {{ 'open' if loop.first else '' }}>
                 <summary>
+                  {% if q.provider == 'openrouter' %}<span class="external-badge"
+                    title="Extern erstellt (OpenRouter{{ ', ' ~ q.model if q.model }})">☁ extern</span>{% endif %}
                   <span class="qa-question">{{ q.question }}</span>
                   <span class="qa-date muted">{{ q.created_at[:10] }}</span>
                 </summary>
@@ -69,7 +92,14 @@
             action="{{ url_for('summary.ask', video_id=video.video_id) }}">
         <textarea name="question" rows="2" required
                   placeholder="z. B. Welche Tools wurden erwähnt?"></textarea>
-        <button type="submit" {{ 'disabled' if jobs.running else '' }}>Frage stellen</button>
+        <div class="provider-actions">
+          <button type="submit" name="provider" value="ollama" {{ 'disabled' if jobs.running else '' }}>Frage stellen</button>
+          {% if openrouter_ready %}
+            <button type="submit" name="provider" value="openrouter" class="btn-external"
+                    title="Frage und Transkript werden an OpenRouter ({{ openrouter_model }}) gesendet"
+                    {{ 'disabled' if jobs.running else '' }}>☁ Extern fragen</button>
+          {% endif %}
+        </div>
       </form>
 
       {% include "_joblog.html" %}

@@ -65,6 +65,12 @@ enabled     = true
 #                                                          # -> gleicher Host wie der Worker, Port 11434
 model       = "qwen3.5:9b"
 
+[openrouter]
+# OPTIONAL, EXTERN - Zusammenfassung/Fragen über openrouter.ai statt Ollama. Das Transkript
+# verlässt dabei das eigene Netz. Einrichtung bequem über die Web-Einstellungen, siehe README.
+# api_key = "sk-or-..."        # oder Umgebungsvariable OPENROUTER_API_KEY; config.toml nicht einchecken!
+# model   = "anthropic/claude-sonnet-4.5"
+
 [asr_worker]
 # EXPERIMENTELL/eigenständig, nur relevant auf dem GPU-Hauptrechner, der
 # 'ytdigest asr-worker serve' betreibt - siehe README "Verteilter Betrieb"

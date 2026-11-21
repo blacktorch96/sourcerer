@@ -59,7 +59,10 @@ def _generate(prompt: str, *, cfg: SummaryCfg) -> SummaryResult:
     return SummaryResult(text=answer)
 
 
-def summarize(text: str, *, cfg: SummaryCfg) -> SummaryResult:
+def build_summary_prompt(text: str, *, cfg: SummaryCfg) -> tuple[str, bool]:
+    """Prompt für die Zusammenfassung + ob das Transkript gekürzt wurde -
+    auch von sources/openrouter.py genutzt, damit beide Anbieter denselben
+    (in den Einstellungen änderbaren) Prompt verwenden."""
     body, truncated = _truncate(text, cfg.max_input_chars)
     if truncated:
         log.warning(
@@ -67,7 +70,23 @@ def summarize(text: str, *, cfg: SummaryCfg) -> SummaryResult:
             "(cfg.summary.max_input_chars) - Ergebnis kann dadurch unvollständig sein.",
             cfg.max_input_chars,
         )
-    prompt = cfg.prompt_template.format(text=body, max_chars=cfg.max_chars)
+    return cfg.prompt_template.format(text=body, max_chars=cfg.max_chars), truncated
+
+
+def build_ask_prompt(text: str, question: str, *, cfg: SummaryCfg) -> tuple[str, bool]:
+    """Wie build_summary_prompt(), für eine freie Frage (cfg.ask_prompt_template)."""
+    body, truncated = _truncate(text, cfg.max_input_chars)
+    if truncated:
+        log.warning(
+            "Transkript für die Frage auf %d Zeichen gekürzt "
+            "(cfg.summary.max_input_chars) - Antwort kann dadurch unvollständig sein.",
+            cfg.max_input_chars,
+        )
+    return cfg.ask_prompt_template.format(text=body, question=question), truncated
+
+
+def summarize(text: str, *, cfg: SummaryCfg) -> SummaryResult:
+    prompt, truncated = build_summary_prompt(text, cfg=cfg)
     result = _generate(prompt, cfg=cfg)
     if result.text:
         result.truncated = truncated
@@ -80,14 +99,7 @@ def ask(text: str, question: str, *, cfg: SummaryCfg) -> SummaryResult:
     """Wie summarize(), aber für eine freie Frage zum Transkript statt einer
     festen Zusammenfassung - gleicher Ollama-Aufruf, eigenes Prompt-Template
     (cfg.ask_prompt_template)."""
-    body, truncated = _truncate(text, cfg.max_input_chars)
-    if truncated:
-        log.warning(
-            "Transkript für die Frage auf %d Zeichen gekürzt "
-            "(cfg.summary.max_input_chars) - Antwort kann dadurch unvollständig sein.",
-            cfg.max_input_chars,
-        )
-    prompt = cfg.ask_prompt_template.format(text=body, question=question)
+    prompt, truncated = build_ask_prompt(text, question, cfg=cfg)
     result = _generate(prompt, cfg=cfg)
     if result.text:
         result.truncated = truncated

@@ -195,3 +195,53 @@ def test_settings_page_shows_textbox_when_ollama_unreachable(client, cfg):
     assert resp.status_code == 200
     assert b'<select id="model"' not in resp.data
     assert b"nicht erreichbar" in resp.data
+
+
+def test_update_openrouter_saves_model_and_key(client, cfg):
+    resp = client.post("/settings/openrouter",
+                       data={"api_key": " sk-or-abc ", "model": "openai/gpt-5"},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    assert cfg.openrouter.api_key == "sk-or-abc"
+    assert cfg.openrouter.model == "openai/gpt-5"
+    text = Path(cfg.source_path).read_text(encoding="utf-8")
+    assert 'api_key = "sk-or-abc"' in text
+    # der Schlüssel wird nie wieder ausgeliefert
+    assert b"sk-or-abc" not in resp.data
+
+
+def test_update_openrouter_empty_key_keeps_existing(client, cfg):
+    cfg.openrouter.api_key = "alt"
+    client.post("/settings/openrouter", data={"api_key": "", "model": "a/b"})
+    assert cfg.openrouter.api_key == "alt"
+    assert cfg.openrouter.model == "a/b"
+    assert "api_key" not in Path(cfg.source_path).read_text(encoding="utf-8")
+
+
+def test_update_openrouter_requires_model(client, cfg):
+    resp = client.post("/settings/openrouter", data={"api_key": "k", "model": " "},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    assert cfg.openrouter.api_key == ""
+    assert not cfg.source_path.exists()
+
+
+def test_remove_openrouter_key(client, cfg):
+    client.post("/settings/openrouter", data={"api_key": "geheim", "model": "a/b"})
+    client.post("/settings/openrouter/remove-key")
+    assert cfg.openrouter.api_key == ""
+    assert "api_key" not in Path(cfg.source_path).read_text(encoding="utf-8")
+
+
+def test_settings_page_never_echoes_key(client, cfg):
+    cfg.openrouter.api_key = "sk-or-topsecret"
+    resp = client.get("/settings")
+    assert b"sk-or-topsecret" not in resp.data
+    assert b"in config.toml gespeichert" in resp.data
+
+
+def test_openrouter_test_button_reports_result(client, cfg, monkeypatch):
+    monkeypatch.setattr(settings_views.openrouter, "check_connection",
+                        lambda c: (True, "Verbindung zu OpenRouter steht."))
+    resp = client.post("/settings/openrouter/test", follow_redirects=True)
+    assert b"Verbindung zu OpenRouter steht." in resp.data

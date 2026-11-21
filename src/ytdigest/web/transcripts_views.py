@@ -258,6 +258,8 @@ def detail(video_id: str):
     questions = get_questions(video.transcript_path)
     return render_template("transcript_detail.html", video=video, feed=feed,
                           paragraphs=paragraphs, summary=summary, questions=questions,
+                          openrouter_ready=get_cfg().openrouter.configured,
+                          openrouter_model=get_cfg().openrouter.model,
                           jobs=get_jobs())
 
 

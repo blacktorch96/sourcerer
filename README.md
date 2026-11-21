@@ -276,6 +276,24 @@ mit "Erneut versuchen"-Button angezeigt, bis ein Versuch klappt).
 ollama pull qwen3.5:9b     # oder ein anderes lokal installiertes Modell
 ```
 
+#### Alternativ: externes Modell über OpenRouter
+
+Zusammenfassungen und Fragen lassen sich auch über ein bei
+[openrouter.ai](https://openrouter.ai) verfügbares Modell erzeugen. **Dabei wird
+das Transkript an einen externen Dienst gesendet.** Auf der Detailseite sind
+diese Buttons deshalb orange markiert ("☁ Extern ..."), und extern erzeugte
+Ergebnisse tragen ein entsprechendes Kennzeichen; der lokale Ollama-Button
+bleibt unverändert daneben.
+
+Einrichtung unter *Einstellungen -> OpenRouter (extern)*: API-Schlüssel
+(erzeugt unter openrouter.ai/keys) und Modell-ID (z. B.
+`anthropic/claude-sonnet-4.5`) eintragen, mit "Verbindung testen" prüfen.
+Der Schlüssel landet im Klartext in der (nicht eingecheckten) `config.toml`
+unter `[openrouter]` und wird in der Oberfläche nie wieder angezeigt;
+alternativ per Umgebungsvariable `OPENROUTER_API_KEY`. Ohne Schlüssel und Modell
+erscheinen die orangen Buttons nicht. Es gilt derselbe Prompt wie bei Ollama;
+`sources/openrouter.py` ist wie die Ollama-Anbindung isoliert.
+
 ## Profile
 
 Mehrere unabhängige Recherchebereiche (eigene Feeds, Datenbank, Transkripte,

@@ -153,6 +153,26 @@ class SummaryCfg(BaseModel):
     )
 
 
+class OpenRouterCfg(BaseModel):
+    """Optionaler EXTERNER Dienst (openrouter.ai) als Alternative zu Ollama für
+    Zusammenfassungen und Fragen, siehe sources/openrouter.py. Anders als
+    Ollama verlässt das Transkript dabei das eigene Netz - die Weboberfläche
+    kennzeichnet diese Aktionen deshalb farblich."""
+
+    api_key: str = ""   # alternativ per Umgebungsvariable OPENROUTER_API_KEY
+    model: str = ""     # OpenRouter-Modell-ID, z. B. "anthropic/claude-sonnet-4.5"
+    base_url: str = "https://openrouter.ai/api/v1"
+    timeout_s: float = 180.0
+
+    def resolved_api_key(self) -> str:
+        return self.api_key.strip() or os.environ.get("OPENROUTER_API_KEY", "").strip()
+
+    @property
+    def configured(self) -> bool:
+        """Nutzbar = Schlüssel und Modell vorhanden."""
+        return bool(self.resolved_api_key() and self.model.strip())
+
+
 class Config(BaseModel):
     paths: Paths = Field(default_factory=Paths)
     feeds: FeedsCfg = Field(default_factory=FeedsCfg)
@@ -165,6 +185,7 @@ class Config(BaseModel):
     gdrive: GDriveCfg = Field(default_factory=GDriveCfg)
     web: WebCfg = Field(default_factory=WebCfg)
     summary: SummaryCfg = Field(default_factory=SummaryCfg)
+    openrouter: OpenRouterCfg = Field(default_factory=OpenRouterCfg)
 
     source_path: Path | None = None
 

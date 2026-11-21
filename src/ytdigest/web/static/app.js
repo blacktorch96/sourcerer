@@ -53,10 +53,13 @@
         // z. B. die Frage-Box auf der Transkript-Seite: die Antwort landet
         // nur im Live-Log, ein Reload würde sie sofort wieder wegwischen
         var reload = form.dataset.reload !== "false";
+        // vor dem Deaktivieren der Buttons lesen: ein deaktivierter Absende-Button
+        // (name="provider" value="openrouter") fehlte sonst im FormData
+        var body = new FormData(form, ev.submitter || undefined);
         setButtonsDisabled(true);
         if (jobLog()) { jobLog().textContent = ""; }
         if (jobStatusText()) jobStatusText().textContent = "startet …";
-        fetch(form.action, { method: "POST", body: new FormData(form) })
+        fetch(form.action, { method: "POST", body: body })
           .then(function (resp) { return resp.json(); })
           .then(function (data) {
             if (data && data.ok === false) {

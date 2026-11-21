@@ -379,3 +379,138 @@ def test_delete_question_unknown_id_returns_404(client, cfg, conn):
 def test_delete_question_404_for_unknown_video(client):
     resp = client.post("/transcripts/does-not-exist/questions/abc12345/delete")
     assert resp.status_code == 404
+
+
+# --------------------------------------------------------------- OpenRouter
+
+def _enable_openrouter(cfg):
+    cfg.openrouter.api_key = "sk-or-test"
+    cfg.openrouter.model = "anthropic/claude-sonnet-4.5"
+
+
+def _capture_job(app):
+    captured = {}
+
+    def fake_start(label, func):
+        captured["func"] = func
+        captured["label"] = label
+        return True
+
+    app.extensions["ytdigest_jobs"].start = fake_start
+    return captured
+
+
+def test_openrouter_buttons_hidden_without_config(client, cfg, conn, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    _seed_done_video(cfg, conn)
+    html = client.get("/transcripts/vid001").data
+    assert b"btn-external" not in html
+    assert b"OpenRouter einrichten" in html
+
+
+def test_openrouter_buttons_shown_when_configured(client, cfg, conn):
+    _enable_openrouter(cfg)
+    _seed_done_video(cfg, conn)
+    html = client.get("/transcripts/vid001").data.decode()
+    assert html.count("btn-external") >= 2          # Zusammenfassung + Frage
+    assert 'value="openrouter"' in html
+    assert "Extern erstellen" in html and "Extern fragen" in html
+
+
+def test_summarize_via_openrouter_writes_summary_and_meta(app, client, cfg, conn, monkeypatch):
+    _enable_openrouter(cfg)
+    _seed_done_video(cfg, conn)
+    monkeypatch.setattr(
+        summary_views.openrouter, "summarize",
+        lambda text, cfg, or_cfg: SummaryResult(text="Extern zusammengefasst."))
+
+    def no_ollama(text, cfg):
+        raise AssertionError("Ollama darf nicht laufen")
+
+    monkeypatch.setattr(summary_views.ollama_summarize, "summarize", no_ollama)
+    captured = _capture_job(app)
+
+    resp = client.post("/transcripts/vid001/summarize", data={"provider": "openrouter"})
+    assert resp.status_code == 200
+    assert "extern" in captured["label"]
+    captured["func"](None)
+
+    target = cfg.paths.output_dir / "Test"
+    assert (target / "vid001.summary.md").read_text(encoding="utf-8").strip() \
+        == "Extern zusammengefasst."
+    meta = json.loads((target / "vid001.summary.meta.json").read_text(encoding="utf-8"))
+    assert meta == {"provider": "openrouter", "model": "anthropic/claude-sonnet-4.5"}
+
+    html = client.get("/transcripts/vid001").data.decode()
+    assert "Extern erstellt (OpenRouter" in html
+
+
+def test_local_summary_overwrites_external_marker(app, client, cfg, conn, monkeypatch):
+    _enable_openrouter(cfg)
+    _seed_done_video(cfg, conn)
+    target = cfg.paths.output_dir / "Test"
+    (target / "vid001.summary.md").write_text("alt", encoding="utf-8")
+    (target / "vid001.summary.meta.json").write_text(
+        json.dumps({"provider": "openrouter", "model": "x"}), encoding="utf-8")
+    monkeypatch.setattr(summary_views.ollama_summarize, "summarize",
+                        lambda text, cfg: SummaryResult(text="lokal"))
+    captured = _capture_job(app)
+
+    client.post("/transcripts/vid001/summarize")  # ohne provider = lokal
+    captured["func"](None)
+
+    assert b"Extern erstellt" not in client.get("/transcripts/vid001").data
+
+
+def test_summary_without_meta_counts_as_local(client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    (cfg.paths.output_dir / "Test" / "vid001.summary.md").write_text("x", encoding="utf-8")
+    assert b"Extern erstellt" not in client.get("/transcripts/vid001").data
+
+
+def test_ask_via_openrouter_persists_provider(app, client, cfg, conn, monkeypatch):
+    _enable_openrouter(cfg)
+    _seed_done_video(cfg, conn)
+    monkeypatch.setattr(
+        summary_views.openrouter, "ask",
+        lambda text, question, cfg, or_cfg: SummaryResult(text="Antwort extern"))
+    captured = _capture_job(app)
+
+    resp = client.post("/transcripts/vid001/ask",
+                       data={"question": "Was?", "provider": "openrouter"})
+    assert resp.status_code == 200
+    captured["func"](None)
+
+    raw = json.loads((cfg.paths.output_dir / "Test" / "vid001.questions.json")
+                     .read_text(encoding="utf-8"))
+    assert raw[0]["provider"] == "openrouter"
+    assert raw[0]["model"] == "anthropic/claude-sonnet-4.5"
+    assert "☁ extern" in client.get("/transcripts/vid001").data.decode()
+
+
+def test_old_question_entries_without_provider_still_load(client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    (cfg.paths.output_dir / "Test" / "vid001.questions.json").write_text(
+        json.dumps([{"id": "a1", "question": "Alt?", "answer": "Ja",
+                     "error": None, "created_at": "2026-01-01T00:00:00+00:00"}]),
+        encoding="utf-8")
+    html = client.get("/transcripts/vid001").data.decode()
+    assert "Alt?" in html and "☁ extern" not in html
+
+
+def test_openrouter_requested_but_not_configured_is_rejected(app, client, cfg, conn, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    _seed_done_video(cfg, conn)
+    captured = _capture_job(app)
+    for url, data in (("/transcripts/vid001/summarize", {"provider": "openrouter"}),
+                      ("/transcripts/vid001/ask", {"question": "?", "provider": "openrouter"})):
+        resp = client.post(url, data=data)
+        assert resp.status_code == 400
+        assert resp.get_json()["ok"] is False
+    assert "func" not in captured
+
+
+def test_unknown_provider_is_rejected(client, cfg, conn):
+    _seed_done_video(cfg, conn)
+    assert client.post("/transcripts/vid001/summarize",
+                       data={"provider": "evil"}).status_code == 400

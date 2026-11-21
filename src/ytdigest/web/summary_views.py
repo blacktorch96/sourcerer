@@ -5,13 +5,13 @@ abgegrenzt: das Feature wird gerade getestet und könnte komplett verworfen
 oder grundlegend geändert werden. Zum Entfernen genügt:
   - diese Datei löschen
   - ihre Registrierung in app.py streichen
-  - sources/ollama_summarize.py löschen
+  - sources/ollama_summarize.py und sources/openrouter.py löschen
   - die 'get_summary_state'/'get_questions'-Importe + die Fallunterscheidung
     in transcripts_views.py (detail()) und transcript_detail.html auf den
     ursprünglichen 'Zusammenfassung erstellen'-Button zurücksetzen
-  - den [summary]-Abschnitt in config.py entfernen
-  - die .questions.json-Dateien im output_dir sind reine Nebenprodukte
-    (eine je Transkript mit gestellten Fragen) und können mit gelöscht werden
+  - den [summary]- und [openrouter]-Abschnitt in config.py entfernen
+  - die .questions.json-/.summary.meta.json-Dateien im output_dir sind reine
+    Nebenprodukte und können mit gelöscht werden
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flask import Blueprint, abort, jsonify, redirect, request, url_for
+from flask import Blueprint, abort, jsonify, make_response, redirect, request, url_for
 
 from ytdigest.config import Config
 from ytdigest.db.repo import Repo
 from ytdigest.db.schema import connect
 from ytdigest.models import RunReport, Video
-from ytdigest.sources import ollama_summarize
+from ytdigest.sources import ollama_summarize, openrouter
 from ytdigest.web.context import get_cfg, get_jobs
 
 log = logging.getLogger(__name__)
@@ -41,11 +41,38 @@ bp = Blueprint("summary", __name__, url_prefix="/transcripts")
 class SummaryState:
     text: str | None = None
     error: str | None = None
+    provider: str = "ollama"   # wer sie erzeugt hat: "ollama" (lokal) | "openrouter" (extern)
+    model: str = ""
+
+
+PROVIDERS = ("ollama", "openrouter")
 
 
 def _paths(transcript_rel: str) -> tuple[Path, Path]:
     base = Path(transcript_rel)
     return base.with_suffix(".summary.md"), base.with_suffix(".summary.error.txt")
+
+
+def _meta_path(transcript_rel: str) -> Path:
+    return Path(transcript_rel).with_suffix(".summary.meta.json")
+
+
+def _provider_from_form(cfg: Config) -> str:
+    """Gewählter Anbieter aus dem Formular (Standard: lokales Ollama). Bricht mit
+    400 ab, wenn ein unbekannter oder nicht eingerichteter Anbieter verlangt wird -
+    ein stiller Rückfall auf Ollama würde dem Nutzer verschweigen, dass die
+    externe Verarbeitung gar nicht stattgefunden hat."""
+    provider = request.form.get("provider") or "ollama"
+    if provider not in PROVIDERS:
+        abort(400)
+    if provider == "openrouter" and not cfg.openrouter.configured:
+        abort(make_response(
+            jsonify(ok=False, error="OpenRouter ist nicht eingerichtet (Einstellungen)."), 400))
+    return provider
+
+
+def _provider_model(cfg: Config, provider: str) -> str:
+    return cfg.openrouter.model if provider == "openrouter" else cfg.summary.model
 
 
 def _resolve_existing(output_dir: Path, rel: Path) -> Path | None:
@@ -66,7 +93,17 @@ def get_summary_state(transcript_path: str | None) -> SummaryState:
 
     summary_abs = _resolve_existing(output_dir, summary_rel)
     if summary_abs is not None:
-        return SummaryState(text=summary_abs.read_text(encoding="utf-8"))
+        state = SummaryState(text=summary_abs.read_text(encoding="utf-8"))
+        meta_abs = _resolve_existing(output_dir, _meta_path(transcript_path))
+        if meta_abs is not None:
+            try:
+                meta = json.loads(meta_abs.read_text(encoding="utf-8"))
+                if meta.get("provider") in PROVIDERS:
+                    state.provider = meta["provider"]
+                    state.model = str(meta.get("model") or "")
+            except ValueError:
+                pass  # kaputte Metadatei: wie "lokal" behandeln, Text bleibt sichtbar
+        return state
 
     error_abs = _resolve_existing(output_dir, error_rel)
     if error_abs is not None:
@@ -87,6 +124,8 @@ class QaEntry:
     answer: str | None = None
     error: str | None = None
     created_at: str = ""
+    provider: str = "ollama"   # ältere Einträge ohne Feld wurden lokal erzeugt
+    model: str = ""
 
 
 def _questions_path(transcript_rel: str) -> Path:
@@ -140,11 +179,13 @@ def _done_video_with_transcript(cfg: Config, video_id: str) -> tuple[Video, Path
 @bp.post("/<path:video_id>/summarize")
 def summarize(video_id: str):
     cfg = get_cfg()
+    provider = _provider_from_form(cfg)
     video, transcript_abs = _done_video_with_transcript(cfg, video_id)
     output_dir = cfg.paths.output_dir.resolve()
     summary_rel, error_rel = _paths(video.transcript_path)
     summary_abs = output_dir / summary_rel
     error_abs = output_dir / error_rel
+    meta_abs = output_dir / _meta_path(video.transcript_path)
 
     def job(_pipeline):
         # Signatur von JobRunner.start() vorgegeben (erwartet einen Callable,
@@ -152,10 +193,17 @@ def summarize(video_id: str):
         # nichts mit der Sync/ASR-Pipeline zu tun, nutzt JobRunner nur für
         # Single-Job-Lock + Live-Log mit.
         text = transcript_abs.read_text(encoding="utf-8")
-        result = ollama_summarize.summarize(text, cfg=cfg.summary)
+        if provider == "openrouter":
+            result = openrouter.summarize(text, cfg=cfg.summary, or_cfg=cfg.openrouter)
+        else:
+            result = ollama_summarize.summarize(text, cfg=cfg.summary)
         if result.text:
             summary_abs.parent.mkdir(parents=True, exist_ok=True)
             summary_abs.write_text(result.text.strip() + "\n", encoding="utf-8")
+            meta_abs.write_text(
+                json.dumps({"provider": provider, "model": _provider_model(cfg, provider)}),
+                encoding="utf-8",
+            )
             error_abs.unlink(missing_ok=True)
         else:
             error_abs.parent.mkdir(parents=True, exist_ok=True)
@@ -163,7 +211,8 @@ def summarize(video_id: str):
         return RunReport()
 
     jobs = get_jobs()
-    started = jobs.start(f"Zusammenfassung: {video.title}", job)
+    label = "Zusammenfassung (extern)" if provider == "openrouter" else "Zusammenfassung"
+    started = jobs.start(f"{label}: {video.title}", job)
     if not started:
         return jsonify(ok=False, error=f"Läuft schon: {jobs.label}"), 409
     return jsonify(ok=True)
@@ -180,6 +229,7 @@ def ask(video_id: str):
     question = (request.form.get("question") or "").strip()
     if not question:
         return jsonify(ok=False, error="Bitte eine Frage eingeben."), 400
+    provider = _provider_from_form(cfg)
 
     video, transcript_abs = _done_video_with_transcript(cfg, video_id)
     output_dir = cfg.paths.output_dir.resolve()
@@ -187,13 +237,18 @@ def ask(video_id: str):
     def job(_pipeline):
         text = transcript_abs.read_text(encoding="utf-8")
         log.info("Frage: %s", question)
-        result = ollama_summarize.ask(text, question, cfg=cfg.summary)
+        if provider == "openrouter":
+            result = openrouter.ask(text, question, cfg=cfg.summary, or_cfg=cfg.openrouter)
+        else:
+            result = ollama_summarize.ask(text, question, cfg=cfg.summary)
         entry = QaEntry(
             id=uuid.uuid4().hex[:8],
             question=question,
             answer=result.text.strip() if result.text else None,
             error=None if result.text else (result.error or "unbekannter Fehler"),
             created_at=datetime.now(UTC).isoformat(timespec="seconds"),
+            provider=provider,
+            model=_provider_model(cfg, provider),
         )
         entries = _load_questions(output_dir, video.transcript_path)
         entries.append(entry)
@@ -205,7 +260,8 @@ def ask(video_id: str):
         return RunReport()
 
     jobs = get_jobs()
-    started = jobs.start(f"Frage: {video.title}", job)
+    label = "Frage (extern)" if provider == "openrouter" else "Frage"
+    started = jobs.start(f"{label}: {video.title}", job)
     if not started:
         return jsonify(ok=False, error=f"Läuft schon: {jobs.label}"), 409
     return jsonify(ok=True)
