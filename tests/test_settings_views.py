@@ -245,3 +245,16 @@ def test_openrouter_test_button_reports_result(client, cfg, monkeypatch):
                         lambda c: (True, "Verbindung zu OpenRouter steht."))
     resp = client.post("/settings/openrouter/test", follow_redirects=True)
     assert b"Verbindung zu OpenRouter steht." in resp.data
+
+
+def test_unwritable_config_shows_error_instead_of_500(client, cfg, monkeypatch):
+    def denied(*args, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(settings_views.config_writer, "update_values", denied)
+    before = cfg.openrouter.model
+    resp = client.post("/settings/openrouter", data={"api_key": "k", "model": "a/b"},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"nicht beschreibbar" in resp.data
+    assert cfg.openrouter.model == before

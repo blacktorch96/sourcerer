@@ -10,6 +10,7 @@ eine Änderung sofort wirkt statt erst nach einem Neustart von
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -19,12 +20,27 @@ from ytdigest.config import SummaryCfg
 from ytdigest.sources import ollama_summarize, openrouter
 from ytdigest.web.context import get_cfg
 
+log = logging.getLogger(__name__)
+
 bp = Blueprint("settings", __name__, url_prefix="/settings")
 
 
 def _config_path() -> Path:
     cfg = get_cfg()
     return cfg.source_path or Path("config.toml")
+
+
+@bp.errorhandler(OSError)
+def _config_not_writable(exc: OSError):
+    """config.toml nicht schreibbar (z. B. gehört auf dem Pi einem anderen
+    Benutzer als dem Dienst): verständliche Meldung statt 500. Das Schreiben
+    passiert in allen Routen vor der Änderung am Config-Objekt, der laufende
+    Stand bleibt also konsistent mit der Datei."""
+    log.error("config.toml nicht beschreibbar: %s", exc)
+    flash(f"Einstellung nicht gespeichert: {_config_path()} ist nicht beschreibbar "
+          f"({exc.strerror or exc}). Dateirechte für den Benutzer des Webdienstes prüfen.",
+          "error")
+    return redirect(url_for("settings.index"))
 
 
 @bp.get("")
